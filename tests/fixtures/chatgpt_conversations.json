@@ -1,0 +1,48 @@
+[
+  {
+    "title": "Meal planning and comfort food",
+    "create_time": 1710000000,
+    "mapping": {
+      "1": {
+        "id": "1",
+        "message": {
+          "author": { "role": "user" },
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "I usually prefer warm noodle soups when I am tired, and I do not like greasy late-night food."
+            ]
+          }
+        }
+      },
+      "2": {
+        "id": "2",
+        "message": {
+          "author": { "role": "assistant" },
+          "content": {
+            "content_type": "text",
+            "parts": ["That sounds like a clear comfort-food preference."]
+          }
+        }
+      }
+    }
+  },
+  {
+    "title": "Study routine ideas",
+    "create_time": 1710001000,
+    "mapping": {
+      "1": {
+        "id": "1",
+        "message": {
+          "author": { "role": "user" },
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "I tend to choose structured study plans with checklists because practical progress feels better than chaotic exploration."
+            ]
+          }
+        }
+      }
+    }
+  }
+]

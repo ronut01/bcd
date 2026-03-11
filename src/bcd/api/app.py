@@ -5,14 +5,14 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session
 
 from bcd.config import Settings, get_settings
 from bcd.decision.schemas import DecisionPredictionInput, FeedbackInput, PredictionResponse
 from bcd.decision.service import DecisionService
-from bcd.profile.schemas import UserProfileRead
+from bcd.profile.schemas import ChatGPTImportResponse, UserOnboardingInput, UserProfileRead
 from bcd.profile.service import ProfileService
 from bcd.reflection.service import ReflectionService
 from bcd.storage.database import get_engine, init_db
@@ -73,6 +73,30 @@ def create_app() -> FastAPI:
             return ProfileService(session).get_profile_card(user_id)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.post("/profiles/onboard", response_model=UserProfileRead)
+    def create_profile_from_onboarding(payload: UserOnboardingInput, session: Session = Depends(get_session)):
+        try:
+            return ProfileService(session).create_profile_from_onboarding(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/profiles/import-chatgpt-export", response_model=ChatGPTImportResponse)
+    async def import_chatgpt_export(
+        display_name: str = Form(...),
+        user_id: str | None = Form(default=None),
+        file: UploadFile = File(...),
+        session: Session = Depends(get_session),
+    ):
+        try:
+            return ProfileService(session).import_profile_from_chatgpt_export(
+                display_name=display_name,
+                user_id=user_id,
+                filename=file.filename or "chatgpt-export.zip",
+                file_bytes=await file.read(),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/decisions/predict", response_model=PredictionResponse)
     def predict_choice(payload: DecisionPredictionInput, session: Session = Depends(get_session)):

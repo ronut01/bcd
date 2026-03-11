@@ -221,6 +221,8 @@ It is intended for someone who wants to try the system quickly without manually 
 
 You can:
 
+- create a profile from manual onboarding answers
+- import a ChatGPT data export (`.zip` or `conversations.json`) to bootstrap a profile in one step
 - load the sample user profile
 - type a decision question
 - enter candidate options
@@ -232,6 +234,8 @@ You can:
 ## Core API endpoints
 
 - `POST /profiles/bootstrap-sample`
+- `POST /profiles/onboard`
+- `POST /profiles/import-chatgpt-export`
 - `GET /profiles/{user_id}`
 - `GET /profiles/{user_id}/card`
 - `POST /decisions/predict`

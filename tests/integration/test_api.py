@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from bcd.api.app import create_app
 from bcd.config import get_settings
 from bcd.storage.database import init_db
+from pathlib import Path
 
 
 def test_api_happy_path(configured_env):
@@ -60,3 +61,32 @@ def test_api_happy_path(configured_env):
     assert memories_response.status_code == 200
     assert len(history_response.json()) >= 1
     assert len(memories_response.json()) >= 1
+
+    onboarding_response = client.post(
+        "/profiles/onboard",
+        json={
+            "display_name": "Taylor",
+            "answers": [
+                {
+                    "question": "How do you usually make everyday choices?",
+                    "answer": "I usually optimize for comfort and reliability."
+                },
+                {
+                    "question": "What kinds of options do you usually prefer or avoid?",
+                    "answer": "I prefer warm food and structured plans, and I avoid chaotic options."
+                }
+            ]
+        },
+    )
+    assert onboarding_response.status_code == 200
+    assert onboarding_response.json()["user_id"].startswith("taylor-")
+
+    fixture_path = Path(__file__).resolve().parents[1] / "fixtures" / "chatgpt_conversations.json"
+    with fixture_path.open("rb") as handle:
+        import_response = client.post(
+            "/profiles/import-chatgpt-export",
+            data={"display_name": "Morgan"},
+            files={"file": ("conversations.json", handle, "application/json")},
+        )
+    assert import_response.status_code == 200
+    assert import_response.json()["user_profile"]["user_id"].startswith("morgan-")

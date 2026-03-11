@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -28,3 +29,20 @@ class UserProfileRead(BaseModel):
     memory_count: int = 0
     history_count: int = 0
     profile_card_path: str | None = None
+
+
+class OnboardingAnswerInput(BaseModel):
+    question: str
+    answer: str
+
+
+class UserOnboardingInput(BaseModel):
+    display_name: str
+    user_id: str | None = None
+    answers: list[OnboardingAnswerInput]
+
+
+class ChatGPTImportResponse(BaseModel):
+    user_profile: UserProfileRead
+    import_source: Literal["chatgpt_export"] = "chatgpt_export"
+    import_stats: dict = Field(default_factory=dict)

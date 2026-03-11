@@ -118,6 +118,12 @@
         gap: 22px;
       }
 
+      .triple-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
       .panel {
         padding: 24px;
       }
@@ -164,6 +170,11 @@
         border: 1px solid var(--line);
         background: #fff;
         color: var(--ink);
+      }
+
+      input[type="file"] {
+        padding: 10px;
+        background: var(--surface-strong);
       }
 
       textarea {
@@ -296,7 +307,8 @@
       @media (max-width: 980px) {
         .hero,
         .layout,
-        .grid-2 {
+        .grid-2,
+        .triple-grid {
           grid-template-columns: 1fr;
         }
       }
@@ -333,16 +345,80 @@
             Start by loading the sample profile. Then enter a decision prompt and candidate options.
             If you configured an LLM API, you can switch to <code>llm</code> or <code>hybrid</code>.
           </p>
-          <div class="button-row">
-            <button class="primary" id="bootstrap-button">Load sample profile</button>
-            <button class="secondary" id="card-button">View profile card</button>
-            <button class="secondary" id="history-button">View recent history</button>
-          </div>
+          <p>
+            Use the setup panel below to create a sample user, onboard your own profile, or import a ChatGPT export.
+          </p>
         </aside>
       </section>
 
       <section class="layout">
         <div class="stack">
+          <article class="panel">
+            <h2>Choose a starting point</h2>
+            <p class="help">You can test the system with the built-in sample user, create a profile manually, or import a ChatGPT export to infer a profile automatically.</p>
+            <div class="stack" style="margin-top: 16px;">
+              <div class="button-row">
+                <button class="primary" id="bootstrap-button">Load sample profile</button>
+                <button class="secondary" id="card-button">View profile card</button>
+                <button class="secondary" id="history-button">View recent history</button>
+              </div>
+
+              <div class="grid-2">
+                <div class="stack" style="padding: 16px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface);">
+                  <div>
+                    <h3>Manual onboarding</h3>
+                    <p class="help">Answer a few short prompts and create a new personalized profile.</p>
+                  </div>
+                  <div class="field">
+                    <label for="onboarding-display-name">Display name</label>
+                    <input id="onboarding-display-name" placeholder="Your name or alias" />
+                  </div>
+                  <div class="field">
+                    <label for="onboarding-q1">How do you usually make everyday choices?</label>
+                    <textarea id="onboarding-q1" placeholder="For example: I usually optimize for comfort and reliability."></textarea>
+                  </div>
+                  <div class="field">
+                    <label for="onboarding-q2">What happens when you are tired or low on energy?</label>
+                    <textarea id="onboarding-q2" placeholder="For example: I default to warm, easy, familiar options."></textarea>
+                  </div>
+                  <div class="field">
+                    <label for="onboarding-q3">How does social context affect your choice?</label>
+                    <textarea id="onboarding-q3" placeholder="For example: With friends I care more about shareable or group-friendly options."></textarea>
+                  </div>
+                  <div class="field">
+                    <label for="onboarding-q4">What kinds of options do you usually prefer or avoid?</label>
+                    <textarea id="onboarding-q4" placeholder="For example: I like structured plans and warm food, but I avoid chaotic or overly heavy options."></textarea>
+                  </div>
+                  <div class="button-row">
+                    <button class="primary" id="create-profile-button">Create profile from answers</button>
+                  </div>
+                </div>
+
+                <div class="stack" style="padding: 16px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface);">
+                  <div>
+                    <h3>Import ChatGPT export</h3>
+                    <p class="help">Upload a ChatGPT export `.zip` or `conversations.json`. The app will infer a starter profile and seed preference memories.</p>
+                  </div>
+                  <div class="field">
+                    <label for="import-display-name">Display name</label>
+                    <input id="import-display-name" placeholder="Name for the imported profile" />
+                  </div>
+                  <div class="field">
+                    <label for="chatgpt-export-file">ChatGPT export file</label>
+                    <input id="chatgpt-export-file" type="file" accept=".zip,.json" />
+                  </div>
+                  <div class="field">
+                    <label for="import-note">What this does</label>
+                    <textarea id="import-note" disabled>It scans user-authored messages, extracts recurring preference statements, builds a starter profile summary, and creates seed memories for later decision prediction.</textarea>
+                  </div>
+                  <div class="button-row">
+                    <button class="primary" id="import-profile-button">Import ChatGPT export</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+
           <article class="panel">
             <h2>Decision input</h2>
             <p class="help">Use the default sample user or change the advanced fields if you want to test different modes.</p>
@@ -531,6 +607,24 @@
       const metricUser = document.getElementById("metric-user");
       const metricMode = document.getElementById("metric-mode");
       const metricConfidence = document.getElementById("metric-confidence");
+      const onboardingQuestions = [
+        {
+          question: "How do you usually make everyday choices?",
+          id: "onboarding-q1"
+        },
+        {
+          question: "What happens when you are tired or low on energy?",
+          id: "onboarding-q2"
+        },
+        {
+          question: "How does social context affect your choice?",
+          id: "onboarding-q3"
+        },
+        {
+          question: "What kinds of options do you usually prefer or avoid?",
+          id: "onboarding-q4"
+        }
+      ];
 
       let latestPrediction = null;
 
@@ -610,8 +704,9 @@
       }
 
       async function request(path, options = {}) {
+        const isFormData = options.body instanceof FormData;
         const response = await fetch(path, {
-          headers: { "Content-Type": "application/json" },
+          ...(isFormData ? {} : { headers: { "Content-Type": "application/json" } }),
           ...options
         });
         if (!response.ok) {
@@ -685,6 +780,11 @@
         historyOutput.textContent = JSON.stringify(payload, null, 2);
       }
 
+      function hydrateActiveUser(userId) {
+        document.getElementById("user-id").value = userId;
+        metricUser.textContent = userId;
+      }
+
       document.getElementById("add-option-button").addEventListener("click", () => createOptionRow(""));
       document.getElementById("reset-button").addEventListener("click", resetForm);
 
@@ -692,9 +792,66 @@
         try {
           setStatus("Loading sample profile...");
           const payload = await request("/profiles/bootstrap-sample", { method: "POST" });
-          document.getElementById("user-id").value = payload.user_id;
-          metricUser.textContent = payload.user_id;
+          hydrateActiveUser(payload.user_id);
           setStatus(`Sample profile '${payload.user_id}' is ready.`);
+          await loadProfileCard();
+          await loadHistory();
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      });
+
+      document.getElementById("create-profile-button").addEventListener("click", async () => {
+        try {
+          const displayName = document.getElementById("onboarding-display-name").value.trim();
+          const answers = onboardingQuestions
+            .map((item) => ({
+              question: item.question,
+              answer: document.getElementById(item.id).value.trim()
+            }))
+            .filter((item) => item.answer);
+          if (!displayName || !answers.length) {
+            setStatus("Enter a display name and at least one onboarding answer.", true);
+            return;
+          }
+          setStatus("Creating profile from onboarding answers...");
+          const payload = await request("/profiles/onboard", {
+            method: "POST",
+            body: JSON.stringify({
+              display_name: displayName,
+              answers
+            })
+          });
+          hydrateActiveUser(payload.user_id);
+          setStatus(`Created profile '${payload.user_id}'. You can now test predictions for this user.`);
+          await loadProfileCard();
+          await loadHistory();
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      });
+
+      document.getElementById("import-profile-button").addEventListener("click", async () => {
+        try {
+          const displayName = document.getElementById("import-display-name").value.trim();
+          const fileInput = document.getElementById("chatgpt-export-file");
+          const file = fileInput.files[0];
+          if (!displayName || !file) {
+            setStatus("Choose a display name and a ChatGPT export file.", true);
+            return;
+          }
+          setStatus("Importing ChatGPT export and inferring a profile...");
+          const formData = new FormData();
+          formData.append("display_name", displayName);
+          formData.append("file", file);
+          const payload = await request("/profiles/import-chatgpt-export", {
+            method: "POST",
+            body: formData
+          });
+          hydrateActiveUser(payload.user_profile.user_id);
+          setStatus(
+            `Imported profile '${payload.user_profile.user_id}' from ${payload.import_stats.conversation_count} conversations.`
+          );
           await loadProfileCard();
           await loadHistory();
         } catch (error) {

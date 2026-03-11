@@ -2,12 +2,26 @@
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 from sqlmodel import Session
 
 from bcd.config import Settings, get_settings
 from bcd.profile.card import ProfileCardRenderer, write_profile_card
+from bcd.profile.inference import (
+    PreferenceSeed,
+    build_preference_profile,
+    build_profile_from_chatgpt_export,
+    load_chatgpt_export,
+    slugify_display_name,
+)
 from bcd.profile.sample_data import load_json
-from bcd.profile.schemas import PreferenceSnapshotRead, UserProfileRead
+from bcd.profile.schemas import (
+    ChatGPTImportResponse,
+    PreferenceSnapshotRead,
+    UserOnboardingInput,
+    UserProfileRead,
+)
 from bcd.storage.models import (
     ActualChoiceFeedback,
     DecisionOption,
@@ -188,6 +202,65 @@ class ProfileService:
         )
         return bundle
 
+    def create_profile_from_onboarding(self, payload: UserOnboardingInput) -> UserProfileRead:
+        """Create a new user profile from explicit onboarding answers."""
+
+        if not payload.answers:
+            raise ValueError("At least one onboarding answer is required.")
+        user_id = payload.user_id or f"{slugify_display_name(payload.display_name)}-{uuid4().hex[:6]}"
+        if self.repository.get_user_profile(user_id):
+            raise ValueError(f"User profile '{user_id}' already exists.")
+
+        source_answers = [answer.model_dump(mode="json") for answer in payload.answers]
+        inferred = build_preference_profile(
+            display_name=payload.display_name,
+            source_answers=source_answers,
+            free_texts=[answer.answer for answer in payload.answers],
+        )
+        self._create_profile_record(
+            user_id=user_id,
+            display_name=payload.display_name,
+            profile_summary=inferred["profile_summary"],
+            personality_signals=inferred["personality_signals"],
+            long_term_preferences=inferred["long_term_preferences"],
+            onboarding_answers=inferred["onboarding_answers"],
+            memory_seeds=inferred["memory_seeds"],
+        )
+        bundle = self.get_profile_bundle(user_id)
+        self.ensure_profile_card(user_id, bundle=bundle)
+        return self.get_profile_bundle(user_id)
+
+    def import_profile_from_chatgpt_export(
+        self,
+        display_name: str,
+        file_bytes: bytes,
+        filename: str,
+        user_id: str | None = None,
+    ) -> ChatGPTImportResponse:
+        """Create a user profile from an uploaded ChatGPT export file."""
+
+        resolved_user_id = user_id or f"{slugify_display_name(display_name)}-{uuid4().hex[:6]}"
+        if self.repository.get_user_profile(resolved_user_id):
+            raise ValueError(f"User profile '{resolved_user_id}' already exists.")
+
+        payloads = load_chatgpt_export(file_bytes=file_bytes, filename=filename)
+        inferred = build_profile_from_chatgpt_export(display_name=display_name, imported_payloads=payloads)
+        self._create_profile_record(
+            user_id=resolved_user_id,
+            display_name=display_name,
+            profile_summary=inferred["profile_summary"],
+            personality_signals=inferred["personality_signals"],
+            long_term_preferences=inferred["long_term_preferences"],
+            onboarding_answers=inferred["onboarding_answers"],
+            memory_seeds=inferred["memory_seeds"],
+        )
+        bundle = self.get_profile_bundle(resolved_user_id)
+        self.ensure_profile_card(resolved_user_id, bundle=bundle)
+        return ChatGPTImportResponse(
+            user_profile=self.get_profile_bundle(resolved_user_id),
+            import_stats=inferred["import_stats"],
+        )
+
     def ensure_profile_card(self, user_id: str, bundle: UserProfileRead | None = None) -> str:
         """Render and persist the user's Markdown profile card."""
 
@@ -224,6 +297,51 @@ class ProfileService:
 
     def _profile_card_path(self, user_id: str):
         return self.settings.profile_card_dir / f"{user_id}.md"
+
+    def _create_profile_record(
+        self,
+        user_id: str,
+        display_name: str,
+        profile_summary: str,
+        personality_signals: dict,
+        long_term_preferences: dict,
+        onboarding_answers: list,
+        memory_seeds: list[PreferenceSeed],
+    ) -> None:
+        profile = UserProfile(
+            user_id=user_id,
+            display_name=display_name,
+            profile_summary=profile_summary,
+            personality_signals_json=personality_signals,
+            long_term_preferences_json=long_term_preferences,
+            onboarding_answers_json=onboarding_answers,
+        )
+        self.repository.add(profile)
+
+        for index, seed in enumerate(memory_seeds):
+            request = self.repository.add(
+                DecisionRequest(
+                    user_id=user_id,
+                    prompt=f"Imported preference seed {index + 1}",
+                    category=seed.category,
+                    context_json=seed.context,
+                )
+            )
+            self.repository.add(
+                MemoryEntry(
+                    user_id=user_id,
+                    source_request_id=request.request_id,
+                    category=seed.category,
+                    summary=seed.summary,
+                    chosen_option_text=seed.chosen_option_text,
+                    context_json=seed.context,
+                    tags_json=seed.tags,
+                    salience_score=0.85,
+                )
+            )
+
+        snapshot = self._rebuild_snapshot(user_id)
+        self.repository.add(snapshot)
 
     def _rebuild_snapshot(self, user_id: str) -> PreferenceSnapshot:
         memories = self.repository.list_memories(user_id, limit=100)
