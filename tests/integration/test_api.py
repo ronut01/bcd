@@ -11,6 +11,14 @@ def test_api_happy_path(configured_env):
     app = create_app()
     client = TestClient(app)
 
+    root_response = client.get("/", follow_redirects=False)
+    assert root_response.status_code == 307
+    assert root_response.headers["location"] == "/app"
+
+    app_response = client.get("/app")
+    assert app_response.status_code == 200
+    assert "local demo" in app_response.text.lower()
+
     bootstrap_response = client.post("/profiles/bootstrap-sample")
     assert bootstrap_response.status_code == 200
     user_id = bootstrap_response.json()["user_id"]

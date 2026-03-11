@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session
 
 from bcd.config import Settings, get_settings
@@ -41,6 +43,15 @@ def create_app() -> FastAPI:
         description="Research-friendly personalized decision prediction MVP.",
         lifespan=lifespan,
     )
+    demo_path = Path(__file__).with_name("static") / "demo.html"
+
+    @app.get("/", include_in_schema=False)
+    def root_redirect():
+        return RedirectResponse(url="/app")
+
+    @app.get("/app", include_in_schema=False, response_class=HTMLResponse)
+    def demo_page():
+        return HTMLResponse(demo_path.read_text(encoding="utf-8"))
 
     @app.post("/profiles/bootstrap-sample", response_model=UserProfileRead)
     def bootstrap_sample_profile(session: Session = Depends(get_session)):

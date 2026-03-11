@@ -104,6 +104,11 @@ python scripts/init_sample_data.py
 uvicorn bcd.api.app:app --reload
 ```
 
+Then open:
+
+- [http://127.0.0.1:8000/app](http://127.0.0.1:8000/app) for the user-friendly local demo
+- [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) for Swagger / raw API testing
+
 ### 4. Run the local demo flow
 
 ```bash
@@ -207,6 +212,22 @@ The demo returns:
 - feedback-driven memory and snapshot updates
 
 This keeps the system interpretable enough for debugging while still showing a complete personalized decision loop.
+
+## User-friendly local demo
+
+The project now includes a browser-based local demo at `/app`.
+
+It is intended for someone who wants to try the system quickly without manually composing API requests.
+
+You can:
+
+- load the sample user profile
+- type a decision question
+- enter candidate options
+- add simple context values
+- switch between `baseline`, `hybrid`, and `llm`
+- see the predicted choice, confidence, explanation, and retrieved memories
+- submit actual feedback after the prediction
 
 ## Core API endpoints
 

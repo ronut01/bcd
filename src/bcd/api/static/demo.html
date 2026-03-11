@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>bcd local demo</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f2e9;
+        --surface: #fffdf9;
+        --surface-strong: #f2ebdf;
+        --ink: #1f2a2d;
+        --muted: #617074;
+        --line: #d9cfbf;
+        --accent: #17624d;
+        --accent-soft: #e3f1eb;
+        --accent-strong: #0d4c3b;
+        --danger: #9a3a2f;
+        --shadow: 0 18px 48px rgba(26, 34, 37, 0.08);
+        --radius: 20px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(23, 98, 77, 0.09), transparent 28%),
+          radial-gradient(circle at right, rgba(180, 142, 85, 0.12), transparent 22%),
+          var(--bg);
+      }
+
+      .shell {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 36px 24px 60px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.4fr 0.9fr;
+        gap: 22px;
+        align-items: start;
+        margin-bottom: 24px;
+      }
+
+      .hero-card,
+      .panel {
+        background: rgba(255, 253, 249, 0.92);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+      }
+
+      .hero-copy {
+        padding: 28px 30px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+        font-size: 13px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 16px 0 10px;
+        font-size: clamp(2.2rem, 4vw, 4.1rem);
+        line-height: 0.96;
+      }
+
+      .hero-copy p,
+      .hero-side p,
+      .help,
+      .note {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .hero-side {
+        padding: 24px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .metric-strip {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .metric {
+        padding: 14px;
+        border-radius: 16px;
+        background: var(--surface-strong);
+        border: 1px solid var(--line);
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 1.15rem;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+        gap: 22px;
+      }
+
+      .panel {
+        padding: 24px;
+      }
+
+      h2, h3 {
+        margin: 0 0 12px;
+        font-size: 1.25rem;
+      }
+
+      .stack {
+        display: grid;
+        gap: 14px;
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .field {
+        display: grid;
+        gap: 8px;
+      }
+
+      label {
+        font-size: 0.95rem;
+        color: var(--muted);
+      }
+
+      input,
+      select,
+      textarea,
+      button {
+        font: inherit;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+      }
+
+      textarea {
+        min-height: 110px;
+        resize: vertical;
+      }
+
+      .option-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .option-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      button {
+        border: none;
+        padding: 12px 18px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+      }
+
+      .primary {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      .secondary {
+        background: var(--surface-strong);
+        color: var(--ink);
+        border: 1px solid var(--line);
+      }
+
+      .danger {
+        background: rgba(154, 58, 47, 0.08);
+        color: var(--danger);
+        border: 1px solid rgba(154, 58, 47, 0.15);
+      }
+
+      .status {
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: var(--surface-strong);
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+
+      .status.error {
+        color: var(--danger);
+        border-color: rgba(154, 58, 47, 0.3);
+        background: rgba(154, 58, 47, 0.07);
+      }
+
+      .prediction-hero {
+        padding: 18px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, rgba(23, 98, 77, 0.08), rgba(23, 98, 77, 0.16));
+        border: 1px solid rgba(23, 98, 77, 0.16);
+      }
+
+      .prediction-hero strong {
+        display: block;
+        font-size: 1.45rem;
+        margin-top: 6px;
+      }
+
+      .chip-row,
+      .memory-list,
+      .rank-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .chip {
+        display: inline-flex;
+        width: fit-content;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: var(--surface-strong);
+        border: 1px solid var(--line);
+        font-size: 0.92rem;
+      }
+
+      .rank-item,
+      .memory-item {
+        padding: 14px;
+        border-radius: 16px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+      }
+
+      .rank-item strong,
+      .memory-item strong {
+        display: block;
+        margin-bottom: 6px;
+      }
+
+      .mini {
+        font-size: 0.9rem;
+        color: var(--muted);
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.83rem;
+      }
+
+      @media (max-width: 980px) {
+        .hero,
+        .layout,
+        .grid-2 {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <section class="hero">
+        <article class="hero-card hero-copy">
+          <span class="eyebrow">Local decision prediction demo</span>
+          <h1>Ask a question. Add options. See what the user would likely choose.</h1>
+          <p>
+            This page sits on top of the same local API and storage layer as the research MVP.
+            It keeps the internal structured memory pipeline, but makes the testing experience much
+            easier than raw Swagger requests.
+          </p>
+        </article>
+        <aside class="hero-card hero-side">
+          <div class="metric-strip">
+            <div class="metric">
+              <span class="mini">Current user</span>
+              <strong id="metric-user">sample-alex</strong>
+            </div>
+            <div class="metric">
+              <span class="mini">Prediction mode</span>
+              <strong id="metric-mode">baseline</strong>
+            </div>
+            <div class="metric">
+              <span class="mini">Confidence</span>
+              <strong id="metric-confidence">-</strong>
+            </div>
+          </div>
+          <p>
+            Start by loading the sample profile. Then enter a decision prompt and candidate options.
+            If you configured an LLM API, you can switch to <code>llm</code> or <code>hybrid</code>.
+          </p>
+          <div class="button-row">
+            <button class="primary" id="bootstrap-button">Load sample profile</button>
+            <button class="secondary" id="card-button">View profile card</button>
+            <button class="secondary" id="history-button">View recent history</button>
+          </div>
+        </aside>
+      </section>
+
+      <section class="layout">
+        <div class="stack">
+          <article class="panel">
+            <h2>Decision input</h2>
+            <p class="help">Use the default sample user or change the advanced fields if you want to test different modes.</p>
+            <div class="stack" style="margin-top: 16px;">
+              <div class="grid-2">
+                <div class="field">
+                  <label for="user-id">User ID</label>
+                  <input id="user-id" value="sample-alex" />
+                </div>
+                <div class="field">
+                  <label for="category">Category</label>
+                  <select id="category">
+                    <option value="food">food</option>
+                    <option value="entertainment">entertainment</option>
+                    <option value="study">study</option>
+                    <option value="shopping">shopping</option>
+                    <option value="custom">custom</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="prompt">Question or situation</label>
+                <textarea id="prompt">Pick dinner after a tiring rainy evening.</textarea>
+              </div>
+
+              <div class="field">
+                <label>Candidate options</label>
+                <div class="option-list" id="option-list"></div>
+                <div class="button-row">
+                  <button class="secondary" id="add-option-button" type="button">Add option</button>
+                </div>
+              </div>
+
+              <div class="grid-2">
+                <div class="field">
+                  <label for="time_of_day">Time of day</label>
+                  <select id="time_of_day">
+                    <option value="">(optional)</option>
+                    <option value="morning">morning</option>
+                    <option value="afternoon">afternoon</option>
+                    <option value="evening">evening</option>
+                    <option value="night" selected>night</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="energy">Energy</label>
+                  <select id="energy">
+                    <option value="">(optional)</option>
+                    <option value="low" selected>low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="grid-2">
+                <div class="field">
+                  <label for="weather">Weather</label>
+                  <input id="weather" value="rainy" />
+                </div>
+                <div class="field">
+                  <label for="with">Who is the user with?</label>
+                  <input id="with" value="alone" />
+                </div>
+              </div>
+
+              <div class="grid-2">
+                <div class="field">
+                  <label for="mood">Mood</label>
+                  <input id="mood" placeholder="optional" />
+                </div>
+                <div class="field">
+                  <label for="budget">Budget sensitivity</label>
+                  <input id="budget" placeholder="optional" />
+                </div>
+              </div>
+
+              <div class="grid-2">
+                <div class="field">
+                  <label for="urgency">Urgency</label>
+                  <input id="urgency" placeholder="optional" />
+                </div>
+                <div class="field">
+                  <label for="prediction-mode">Prediction mode</label>
+                  <select id="prediction-mode">
+                    <option value="baseline" selected>baseline</option>
+                    <option value="hybrid">hybrid</option>
+                    <option value="llm">llm</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="button-row">
+                <button class="primary" id="predict-button">Run prediction</button>
+                <button class="secondary" id="reset-button" type="button">Reset example</button>
+              </div>
+              <div class="status" id="status">Ready. Load the sample profile or run a prediction directly.</div>
+            </div>
+          </article>
+
+          <article class="panel hidden" id="feedback-panel">
+            <h2>Feedback</h2>
+            <p class="help">After a prediction, you can record the actual choice so the memory store updates.</p>
+            <div class="stack" style="margin-top: 16px;">
+              <div class="field">
+                <label for="actual-option">Actual chosen option</label>
+                <select id="actual-option"></select>
+              </div>
+              <div class="field">
+                <label for="reason-text">Why was that choice made?</label>
+                <textarea id="reason-text" placeholder="Optional free-text reason"></textarea>
+              </div>
+              <div class="field">
+                <label for="reason-tags">Reason tags</label>
+                <input id="reason-tags" placeholder="warm, easy, social" />
+              </div>
+              <div class="button-row">
+                <button class="primary" id="feedback-button">Save feedback</button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="stack">
+          <article class="panel">
+            <h2>Prediction result</h2>
+            <div id="prediction-empty" class="note">No prediction yet. Run the form on the left to see a result.</div>
+            <div id="prediction-content" class="stack hidden">
+              <div class="prediction-hero">
+                <span class="mini">Predicted choice</span>
+                <strong id="predicted-option-text">-</strong>
+                <div class="chip-row" style="margin-top: 12px;">
+                  <span class="chip" id="strategy-chip">strategy: -</span>
+                  <span class="chip" id="llm-chip">llm used: no</span>
+                </div>
+              </div>
+              <div>
+                <h3>Explanation</h3>
+                <p class="help" id="prediction-explanation"></p>
+              </div>
+              <div>
+                <h3>Ranked options</h3>
+                <div class="rank-list" id="rank-list"></div>
+              </div>
+              <div>
+                <h3>Retrieved memories</h3>
+                <div class="memory-list" id="memory-list"></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <h2>Inspector</h2>
+            <p class="help">This keeps the structured research artifacts visible while offering a friendlier UI.</p>
+            <div class="stack" style="margin-top: 16px;">
+              <div>
+                <h3>Profile card</h3>
+                <pre id="profile-card-output">Profile card output will appear here.</pre>
+              </div>
+              <div>
+                <h3>Recent history</h3>
+                <pre id="history-output">Recent history will appear here.</pre>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      const optionList = document.getElementById("option-list");
+      const statusBox = document.getElementById("status");
+      const feedbackPanel = document.getElementById("feedback-panel");
+      const actualOptionSelect = document.getElementById("actual-option");
+      const predictedOptionText = document.getElementById("predicted-option-text");
+      const predictionExplanation = document.getElementById("prediction-explanation");
+      const strategyChip = document.getElementById("strategy-chip");
+      const llmChip = document.getElementById("llm-chip");
+      const rankList = document.getElementById("rank-list");
+      const memoryList = document.getElementById("memory-list");
+      const predictionEmpty = document.getElementById("prediction-empty");
+      const predictionContent = document.getElementById("prediction-content");
+      const profileCardOutput = document.getElementById("profile-card-output");
+      const historyOutput = document.getElementById("history-output");
+      const metricUser = document.getElementById("metric-user");
+      const metricMode = document.getElementById("metric-mode");
+      const metricConfidence = document.getElementById("metric-confidence");
+
+      let latestPrediction = null;
+
+      const defaultOptions = [
+        "Warm noodle soup",
+        "Greasy burger",
+        "Raw salad"
+      ];
+
+      function setStatus(message, error = false) {
+        statusBox.textContent = message;
+        statusBox.classList.toggle("error", error);
+      }
+
+      function createOptionRow(value = "") {
+        const row = document.createElement("div");
+        row.className = "option-row";
+        row.innerHTML = `
+          <input type="text" value="${value.replace(/"/g, "&quot;")}" placeholder="Candidate option" />
+          <button class="danger" type="button">Remove</button>
+        `;
+        row.querySelector("button").addEventListener("click", () => {
+          if (optionList.children.length > 2) {
+            row.remove();
+          } else {
+            setStatus("At least two options are required.", true);
+          }
+        });
+        optionList.appendChild(row);
+      }
+
+      function resetForm() {
+        document.getElementById("user-id").value = "sample-alex";
+        document.getElementById("category").value = "food";
+        document.getElementById("prompt").value = "Pick dinner after a tiring rainy evening.";
+        document.getElementById("time_of_day").value = "night";
+        document.getElementById("energy").value = "low";
+        document.getElementById("weather").value = "rainy";
+        document.getElementById("with").value = "alone";
+        document.getElementById("mood").value = "";
+        document.getElementById("budget").value = "";
+        document.getElementById("urgency").value = "";
+        document.getElementById("prediction-mode").value = "baseline";
+        optionList.innerHTML = "";
+        defaultOptions.forEach(createOptionRow);
+        feedbackPanel.classList.add("hidden");
+        predictionEmpty.classList.remove("hidden");
+        predictionContent.classList.add("hidden");
+        latestPrediction = null;
+        setStatus("Ready. Load the sample profile or run a prediction directly.");
+      }
+
+      function getContextPayload() {
+        const fields = ["time_of_day", "energy", "weather", "with", "mood", "budget", "urgency"];
+        const context = {};
+        for (const key of fields) {
+          const value = document.getElementById(key).value.trim();
+          if (value) {
+            context[key] = value;
+          }
+        }
+        return context;
+      }
+
+      function getPredictionPayload() {
+        return {
+          user_id: document.getElementById("user-id").value.trim(),
+          prompt: document.getElementById("prompt").value.trim(),
+          category: document.getElementById("category").value.trim(),
+          context: getContextPayload(),
+          prediction_mode: document.getElementById("prediction-mode").value,
+          options: Array.from(optionList.querySelectorAll("input"))
+            .map((input) => input.value.trim())
+            .filter(Boolean)
+            .map((optionText) => ({ option_text: optionText }))
+        };
+      }
+
+      async function request(path, options = {}) {
+        const response = await fetch(path, {
+          headers: { "Content-Type": "application/json" },
+          ...options
+        });
+        if (!response.ok) {
+          const detail = await response.text();
+          throw new Error(detail || `Request failed with ${response.status}`);
+        }
+        return response.json();
+      }
+
+      function renderPrediction(prediction) {
+        latestPrediction = prediction;
+        predictionEmpty.classList.add("hidden");
+        predictionContent.classList.remove("hidden");
+        feedbackPanel.classList.remove("hidden");
+        predictedOptionText.textContent = prediction.predicted_option_text;
+        predictionExplanation.textContent = prediction.explanation;
+        strategyChip.textContent = `strategy: ${prediction.strategy}`;
+        llmChip.textContent = `llm used: ${prediction.llm_used ? "yes" : "no"}`;
+        metricUser.textContent = document.getElementById("user-id").value.trim();
+        metricMode.textContent = prediction.strategy;
+        metricConfidence.textContent = `${Math.round(prediction.confidence * 100)}%`;
+
+        rankList.innerHTML = "";
+        prediction.ranked_options.forEach((item, index) => {
+          const node = document.createElement("div");
+          node.className = "rank-item";
+          node.innerHTML = `
+            <strong>${index + 1}. ${item.option_text}</strong>
+            <div class="mini">confidence: ${Math.round(item.confidence * 100)}% | raw score: ${item.raw_score}</div>
+            <div class="mini">${item.reasons.join(" ")}</div>
+          `;
+          rankList.appendChild(node);
+        });
+
+        memoryList.innerHTML = "";
+        prediction.retrieved_memories.forEach((memory) => {
+          const node = document.createElement("div");
+          node.className = "memory-item";
+          node.innerHTML = `
+            <strong>${memory.chosen_option_text}</strong>
+            <div class="mini">${memory.summary}</div>
+            <div class="mini">retrieval score: ${memory.retrieval_score}</div>
+          `;
+          memoryList.appendChild(node);
+        });
+        if (!prediction.retrieved_memories.length) {
+          memoryList.innerHTML = `<div class="memory-item"><div class="mini">No supporting memories were returned for this request.</div></div>`;
+        }
+
+        actualOptionSelect.innerHTML = "";
+        prediction.ranked_options.forEach((item) => {
+          const option = document.createElement("option");
+          option.value = item.option_id;
+          option.textContent = item.option_text;
+          if (item.option_id === prediction.predicted_option_id) {
+            option.selected = true;
+          }
+          actualOptionSelect.appendChild(option);
+        });
+      }
+
+      async function loadProfileCard() {
+        const userId = document.getElementById("user-id").value.trim();
+        const payload = await request(`/profiles/${encodeURIComponent(userId)}/card`);
+        profileCardOutput.textContent = payload.content;
+      }
+
+      async function loadHistory() {
+        const userId = document.getElementById("user-id").value.trim();
+        const payload = await request(`/users/${encodeURIComponent(userId)}/history?limit=5`);
+        historyOutput.textContent = JSON.stringify(payload, null, 2);
+      }
+
+      document.getElementById("add-option-button").addEventListener("click", () => createOptionRow(""));
+      document.getElementById("reset-button").addEventListener("click", resetForm);
+
+      document.getElementById("bootstrap-button").addEventListener("click", async () => {
+        try {
+          setStatus("Loading sample profile...");
+          const payload = await request("/profiles/bootstrap-sample", { method: "POST" });
+          document.getElementById("user-id").value = payload.user_id;
+          metricUser.textContent = payload.user_id;
+          setStatus(`Sample profile '${payload.user_id}' is ready.`);
+          await loadProfileCard();
+          await loadHistory();
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      });
+
+      document.getElementById("card-button").addEventListener("click", async () => {
+        try {
+          setStatus("Loading profile card...");
+          await loadProfileCard();
+          setStatus("Profile card loaded.");
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      });
+
+      document.getElementById("history-button").addEventListener("click", async () => {
+        try {
+          setStatus("Loading recent history...");
+          await loadHistory();
+          setStatus("Recent history loaded.");
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      });
+
+      document.getElementById("predict-button").addEventListener("click", async () => {
+        try {
+          const payload = getPredictionPayload();
+          if (!payload.user_id || !payload.prompt || payload.options.length < 2) {
+            setStatus("Please provide a user id, a prompt, and at least two options.", true);
+            return;
+          }
+          setStatus("Running prediction...");
+          const prediction = await request("/decisions/predict", {
+            method: "POST",
+            body: JSON.stringify(payload)
+          });
+          renderPrediction(prediction);
+          await loadProfileCard();
+          setStatus(`Prediction complete. Top choice: ${prediction.predicted_option_text}`);
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      });
+
+      document.getElementById("feedback-button").addEventListener("click", async () => {
+        if (!latestPrediction) {
+          setStatus("Run a prediction before saving feedback.", true);
+          return;
+        }
+        try {
+          setStatus("Saving feedback...");
+          const reasonTags = document.getElementById("reason-tags").value
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean);
+          await request(`/decisions/${encodeURIComponent(latestPrediction.request_id)}/feedback`, {
+            method: "POST",
+            body: JSON.stringify({
+              actual_option_id: actualOptionSelect.value,
+              reason_text: document.getElementById("reason-text").value.trim() || null,
+              reason_tags: reasonTags
+            })
+          });
+          await loadHistory();
+          await loadProfileCard();
+          setStatus("Feedback saved and memory updated.");
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      });
+
+      resetForm();
+    </script>
+  </body>
+</html>
