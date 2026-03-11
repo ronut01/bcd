@@ -68,6 +68,7 @@ class ReflectionService:
         )
         snapshot = self.profile_service._rebuild_snapshot(request.user_id)
         snapshot = self.repository.add(snapshot)
+        self.profile_service.ensure_profile_card(request.user_id)
 
         return FeedbackResponse(
             feedback_id=feedback.feedback_id,

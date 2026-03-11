@@ -41,6 +41,8 @@ This makes the project a strong foundation for future work in:
 - predict the most likely user choice with confidence and explanation
 - log actual user feedback and reasons
 - update memory and short-term preference snapshots
+- generate a Markdown `profile_card` for LLM-facing user modeling
+- optionally use an OpenAI-compatible LLM for ranking
 - expose a local FastAPI interface, CLI demo, and evaluation script
 
 ## System overview
@@ -114,6 +116,37 @@ python scripts/run_demo.py
 python scripts/evaluate_baseline.py
 ```
 
+## Optional LLM mode
+
+The repository works without any external API by default.
+
+If you want LLM-assisted ranking, configure an OpenAI-compatible endpoint:
+
+```bash
+export BCD_PREDICTION_MODE=hybrid
+export BCD_LLM_API_KEY=your_api_key
+export BCD_LLM_BASE_URL=https://api.openai.com/v1
+export BCD_LLM_MODEL=gpt-4.1-mini
+```
+
+Then use:
+
+```bash
+bcd-cli predict \
+  --user-id sample-alex \
+  --prompt "Pick dinner after a tiring rainy evening." \
+  --category food \
+  --options "Warm noodle soup|Greasy burger|Raw salad" \
+  --context-json '{"time_of_day":"night","energy":"low","weather":"rainy","with":"alone"}' \
+  --prediction-mode hybrid
+```
+
+Supported prediction modes:
+
+- `baseline`: heuristic + retrieval only
+- `llm`: LLM ranking only, with baseline fallback if unavailable
+- `hybrid`: baseline ranking blended with LLM ranking
+
 ## Minimal API flow
 
 ### Bootstrap the sample user
@@ -157,6 +190,12 @@ curl -X POST http://127.0.0.1:8000/decisions/<request_id>/feedback \
   }'
 ```
 
+### Inspect the generated profile card
+
+```bash
+curl http://127.0.0.1:8000/profiles/sample-alex/card
+```
+
 ## Example output
 
 The demo returns:
@@ -173,6 +212,7 @@ This keeps the system interpretable enough for debugging while still showing a c
 
 - `POST /profiles/bootstrap-sample`
 - `GET /profiles/{user_id}`
+- `GET /profiles/{user_id}/card`
 - `POST /decisions/predict`
 - `POST /decisions/{request_id}/feedback`
 - `GET /users/{user_id}/history`

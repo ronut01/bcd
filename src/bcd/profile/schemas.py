@@ -27,3 +27,4 @@ class UserProfileRead(BaseModel):
     latest_snapshot: PreferenceSnapshotRead | None = None
     memory_count: int = 0
     history_count: int = 0
+    profile_card_path: str | None = None

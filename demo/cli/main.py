@@ -42,6 +42,7 @@ def predict(
     category: str,
     options: str = typer.Option(..., help="Pipe-separated option texts, for example 'A|B|C'."),
     context_json: str = typer.Option("{}", help="JSON object describing optional context."),
+    prediction_mode: str = typer.Option("baseline", help="baseline, llm, or hybrid."),
 ) -> None:
     """Submit a decision request and print the prediction."""
 
@@ -55,6 +56,7 @@ def predict(
                 category=category,
                 context=json.loads(context_json),
                 options=[DecisionOptionInput(option_text=item.strip()) for item in options.split("|") if item.strip()],
+                prediction_mode=prediction_mode,
             )
         )
         _pretty_dump(prediction)
@@ -92,6 +94,17 @@ def history(user_id: str, limit: int = 10) -> None:
     with session_scope(settings.database_url) as session:
         result = ReflectionService(session).list_user_history(user_id=user_id, limit=limit)
         _pretty_dump([item.model_dump(mode="json") for item in result])
+
+
+@app.command("profile-card")
+def profile_card(user_id: str) -> None:
+    """Render and inspect the Markdown preference card for a user."""
+
+    settings = get_settings()
+    init_db(settings)
+    with session_scope(settings.database_url) as session:
+        result = ProfileService(session, settings).get_profile_card(user_id)
+        _pretty_dump(result)
 
 
 @app.command()

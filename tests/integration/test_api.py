@@ -14,6 +14,9 @@ def test_api_happy_path(configured_env):
     bootstrap_response = client.post("/profiles/bootstrap-sample")
     assert bootstrap_response.status_code == 200
     user_id = bootstrap_response.json()["user_id"]
+    card_response = client.get(f"/profiles/{user_id}/card")
+    assert card_response.status_code == 200
+    assert "content" in card_response.json()
 
     prediction_response = client.post(
         "/decisions/predict",

@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Literal
 
 from sqlmodel import Session
 
 from bcd.config import Settings, get_settings
 from bcd.decision.schemas import DecisionPredictionInput, PredictionResponse, RankedOption
+from bcd.llm.base import LLMRankingRequest, LLMRankingResult, LLMRanker, NullLLMRanker
+from bcd.llm.openai_compatible import OpenAICompatibleLLMRanker
 from bcd.memory.retriever import MemoryRetriever, RetrievalQuery
+from bcd.profile.service import ProfileService
 from bcd.profile.schemas import PreferenceSnapshotRead
 from bcd.storage.models import DecisionOption, DecisionRequest, PredictionResult
 from bcd.storage.repository import BCDRepository
@@ -28,16 +32,24 @@ class _OptionScore:
 class DecisionService:
     """Stores decision requests and produces a deterministic prediction."""
 
-    def __init__(self, session: Session, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        session: Session,
+        settings: Settings | None = None,
+        llm_ranker: LLMRanker | None = None,
+    ) -> None:
         self.session = session
         self.settings = settings or get_settings()
         self.repository = BCDRepository(session)
         self.retriever = MemoryRetriever(session)
+        self.profile_service = ProfileService(session, self.settings)
+        self.llm_ranker = llm_ranker or OpenAICompatibleLLMRanker.from_settings(self.settings) or NullLLMRanker()
 
     def predict(self, payload: DecisionPredictionInput) -> PredictionResponse:
         user = self.repository.get_user_profile(payload.user_id)
         if user is None:
             raise ValueError(f"User profile '{payload.user_id}' was not found.")
+        prediction_mode: Literal["baseline", "llm", "hybrid"] = payload.prediction_mode or self.settings.prediction_mode
 
         request = self.repository.add(
             DecisionRequest(
@@ -82,23 +94,39 @@ class DecisionService:
             if snapshot_row
             else None
         )
+        profile_card_path = self.profile_service.ensure_profile_card(payload.user_id)
+        profile_card_markdown = self.profile_service.get_profile_card(payload.user_id)["content"]
 
-        scored = [self._score_option(user.long_term_preferences_json, snapshot, option, payload.context, payload.category, retrieved_memories) for option in options]
-        confidences = self._softmax([item.raw_score for item in scored])
-        ranked: list[_OptionScore] = []
-        for item, confidence in zip(scored, confidences, strict=True):
-            ranked.append(
-                _OptionScore(
-                    option=item.option,
-                    raw_score=item.raw_score,
-                    confidence=confidence,
-                    breakdown=item.breakdown,
-                    reasons=item.reasons,
-                )
+        heuristic_scored = [
+            self._score_option(
+                user.long_term_preferences_json,
+                snapshot,
+                option,
+                payload.context,
+                payload.category,
+                retrieved_memories,
             )
-        ranked.sort(key=lambda item: item.confidence, reverse=True)
+            for option in options
+        ]
+        heuristic_ranked = self._normalize_and_sort(heuristic_scored)
+        llm_result, llm_error = self._maybe_rank_with_llm(
+            prediction_mode=prediction_mode,
+            prompt=payload.prompt,
+            category=payload.category,
+            context=payload.context,
+            options=options,
+            retrieved_memories=retrieved_memories,
+            profile_card_markdown=profile_card_markdown,
+            heuristic_ranked=heuristic_ranked,
+        )
+        ranked, strategy, explanation, llm_used = self._resolve_final_ranking(
+            prediction_mode=prediction_mode,
+            heuristic_ranked=heuristic_ranked,
+            llm_result=llm_result,
+            llm_error=llm_error,
+            retrieved_memories=retrieved_memories,
+        )
         top = ranked[0]
-        explanation = self._build_explanation(top.option.option_text, top.reasons, retrieved_memories)
 
         prediction = self.repository.add(
             PredictionResult(
@@ -108,7 +136,7 @@ class DecisionService:
                 score_breakdown_json={item.option.option_id: item.breakdown for item in ranked},
                 confidence_by_option_json={item.option.option_id: item.confidence for item in ranked},
                 explanation=explanation,
-                strategy="heuristic-retrieval-hybrid",
+                strategy=strategy,
                 retrieved_memory_ids_json=[memory.memory_id for memory in retrieved_memories],
             )
         )
@@ -121,6 +149,8 @@ class DecisionService:
             confidence=round(top.confidence, 4),
             explanation=prediction.explanation,
             strategy=prediction.strategy,
+            llm_used=llm_used,
+            profile_card_path=profile_card_path,
             ranked_options=[
                 RankedOption(
                     option_id=item.option.option_id,
@@ -134,6 +164,154 @@ class DecisionService:
             retrieved_memories=retrieved_memories,
             created_at=prediction.created_at,
         )
+
+    @staticmethod
+    def _normalize_and_sort(scored: list[_OptionScore]) -> list[_OptionScore]:
+        confidences = DecisionService._softmax([item.raw_score for item in scored])
+        ranked: list[_OptionScore] = []
+        for item, confidence in zip(scored, confidences, strict=True):
+            ranked.append(
+                _OptionScore(
+                    option=item.option,
+                    raw_score=item.raw_score,
+                    confidence=confidence,
+                    breakdown=item.breakdown,
+                    reasons=item.reasons,
+                )
+            )
+        ranked.sort(key=lambda item: item.confidence, reverse=True)
+        return ranked
+
+    def _maybe_rank_with_llm(
+        self,
+        prediction_mode: Literal["baseline", "llm", "hybrid"],
+        prompt: str,
+        category: str,
+        context: dict,
+        options: list[DecisionOption],
+        retrieved_memories,
+        profile_card_markdown: str,
+        heuristic_ranked: list[_OptionScore],
+    ) -> tuple[LLMRankingResult | None, str | None]:
+        if prediction_mode == "baseline":
+            return None, None
+
+        request = LLMRankingRequest(
+            prompt=prompt,
+            category=category,
+            context=context,
+            options=[option.option_text for option in options],
+            memory_summaries=[memory.summary for memory in retrieved_memories],
+            profile_card_markdown=profile_card_markdown,
+            heuristic_ranking=[item.option.option_text for item in heuristic_ranked],
+        )
+        try:
+            result = self.llm_ranker.rank(request)
+            if result is None:
+                return None, "LLM ranker is not configured."
+            return result, None
+        except Exception as exc:
+            return None, str(exc)
+
+    def _resolve_final_ranking(
+        self,
+        prediction_mode: Literal["baseline", "llm", "hybrid"],
+        heuristic_ranked: list[_OptionScore],
+        llm_result: LLMRankingResult | None,
+        llm_error: str | None,
+        retrieved_memories,
+    ) -> tuple[list[_OptionScore], str, str, bool]:
+        if prediction_mode == "baseline" or llm_result is None:
+            explanation = self._build_explanation(
+                heuristic_ranked[0].option.option_text,
+                heuristic_ranked[0].reasons,
+                retrieved_memories,
+                llm_note=(
+                    f"LLM fallback: {llm_error}"
+                    if prediction_mode in {"llm", "hybrid"} and llm_error
+                    else None
+                ),
+            )
+            strategy = (
+                "heuristic-retrieval-hybrid"
+                if prediction_mode == "baseline" or not llm_error
+                else f"{prediction_mode}-fallback-to-baseline"
+            )
+            return heuristic_ranked, strategy, explanation, False
+
+        if prediction_mode == "llm":
+            llm_ranked = self._llm_rank_only(heuristic_ranked, llm_result)
+            explanation = self._build_explanation(
+                llm_ranked[0].option.option_text,
+                llm_ranked[0].reasons,
+                retrieved_memories,
+                llm_note=llm_result.explanation,
+            )
+            return llm_ranked, "llm-ranking", explanation, True
+
+        hybrid_ranked = self._blend_hybrid_ranking(heuristic_ranked, llm_result)
+        explanation = self._build_explanation(
+            hybrid_ranked[0].option.option_text,
+            hybrid_ranked[0].reasons,
+            retrieved_memories,
+            llm_note=llm_result.explanation,
+        )
+        return hybrid_ranked, "hybrid-heuristic-llm", explanation, True
+
+    @staticmethod
+    def _llm_rank_only(heuristic_ranked: list[_OptionScore], llm_result: LLMRankingResult) -> list[_OptionScore]:
+        option_map = {item.option.option_text: item for item in heuristic_ranked}
+        ordered_items = [
+            option_map[text]
+            for text in llm_result.ranked_options
+            if text in option_map
+        ]
+        ordered_items.extend(item for item in heuristic_ranked if item not in ordered_items)
+        llm_scores = [len(ordered_items) - index for index in range(len(ordered_items))]
+        confidences = DecisionService._softmax(llm_scores)
+        result: list[_OptionScore] = []
+        for item, confidence, llm_score in zip(ordered_items, confidences, llm_scores, strict=True):
+            breakdown = dict(item.breakdown)
+            breakdown["llm_rank_bonus"] = float(llm_score)
+            breakdown["total"] = round(float(llm_score), 4)
+            reasons = list(dict.fromkeys(item.reasons + ["The LLM ranked this option highly given the user card and memories."]))
+            result.append(
+                _OptionScore(
+                    option=item.option,
+                    raw_score=float(llm_score),
+                    confidence=confidence,
+                    breakdown=breakdown,
+                    reasons=reasons,
+                )
+            )
+        return result
+
+    @staticmethod
+    def _blend_hybrid_ranking(heuristic_ranked: list[_OptionScore], llm_result: LLMRankingResult) -> list[_OptionScore]:
+        llm_position_map = {
+            text: len(llm_result.ranked_options) - index
+            for index, text in enumerate(llm_result.ranked_options)
+        }
+        blended: list[_OptionScore] = []
+        for item in heuristic_ranked:
+            llm_bonus = llm_position_map.get(item.option.option_text, 0) * 0.8
+            raw_score = item.raw_score + llm_bonus
+            breakdown = dict(item.breakdown)
+            breakdown["llm_rank_bonus"] = round(llm_bonus, 4)
+            breakdown["total"] = round(raw_score, 4)
+            reasons = list(item.reasons)
+            if llm_bonus:
+                reasons.append("The LLM also ranked this option highly after reading the profile card.")
+            blended.append(
+                _OptionScore(
+                    option=item.option,
+                    raw_score=raw_score,
+                    confidence=0.0,
+                    breakdown=breakdown,
+                    reasons=list(dict.fromkeys(reasons)),
+                )
+            )
+        return DecisionService._normalize_and_sort(blended)
 
     def _score_option(
         self,
@@ -226,7 +404,12 @@ class DecisionService:
         return [value / total for value in scaled]
 
     @staticmethod
-    def _build_explanation(predicted_option_text: str, reasons: list[str], retrieved_memories) -> str:
+    def _build_explanation(
+        predicted_option_text: str,
+        reasons: list[str],
+        retrieved_memories,
+        llm_note: str | None = None,
+    ) -> str:
         explanation_parts = [f"The system predicts '{predicted_option_text}'."]
         if reasons:
             explanation_parts.append(" ".join(reasons[:2]))
@@ -234,4 +417,6 @@ class DecisionService:
             explanation_parts.append(
                 f"It also found {len(retrieved_memories)} relevant memories, led by '{retrieved_memories[0].chosen_option_text}'."
             )
+        if llm_note:
+            explanation_parts.append(f"LLM note: {llm_note}")
         return " ".join(explanation_parts)

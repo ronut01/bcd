@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -20,6 +21,7 @@ class DecisionPredictionInput(BaseModel):
     category: str
     options: list[DecisionOptionInput]
     context: dict = Field(default_factory=dict)
+    prediction_mode: Literal["baseline", "llm", "hybrid"] | None = None
 
     @field_validator("options")
     @classmethod
@@ -45,6 +47,8 @@ class PredictionResponse(BaseModel):
     confidence: float
     explanation: str
     strategy: str
+    llm_used: bool = False
+    profile_card_path: str | None = None
     ranked_options: list[RankedOption]
     retrieved_memories: list[RetrievedMemory] = Field(default_factory=list)
     created_at: datetime

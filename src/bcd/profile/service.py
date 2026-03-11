@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlmodel import Session
 
 from bcd.config import Settings, get_settings
+from bcd.profile.card import ProfileCardRenderer, write_profile_card
 from bcd.profile.sample_data import load_json
 from bcd.profile.schemas import PreferenceSnapshotRead, UserProfileRead
 from bcd.storage.models import (
@@ -31,6 +32,13 @@ def _build_seed_summary(event: dict, chosen_text: str) -> str:
     return summary
 
 
+def _is_meaningful_snapshot_tag(tag: str) -> bool:
+    stop_tags = {"time", "of", "day", "with", "energy", "weather", "budget", "mood", "a", "the"}
+    if tag in stop_tags:
+        return False
+    return True
+
+
 class ProfileService:
     """Handles profile initialization and retrieval."""
 
@@ -38,6 +46,7 @@ class ProfileService:
         self.session = session
         self.settings = settings or get_settings()
         self.repository = BCDRepository(session)
+        self.card_renderer = ProfileCardRenderer()
 
     def bootstrap_sample_profile(self) -> UserProfileRead:
         """Create the sample profile and seed history if it does not exist."""
@@ -45,6 +54,8 @@ class ProfileService:
         sample_profile = load_json(self.settings.sample_profile_path)
         existing = self.repository.get_user_profile(sample_profile["user_id"])
         if existing:
+            bundle = self.get_profile_bundle(existing.user_id)
+            self.ensure_profile_card(existing.user_id, bundle=bundle)
             return self.get_profile_bundle(existing.user_id)
 
         profile = UserProfile(
@@ -138,6 +149,8 @@ class ProfileService:
 
         snapshot = self._rebuild_snapshot(profile.user_id)
         self.repository.add(snapshot)
+        bundle = self.get_profile_bundle(profile.user_id)
+        self.ensure_profile_card(profile.user_id, bundle=bundle)
         return self.get_profile_bundle(profile.user_id)
 
     def get_profile_bundle(self, user_id: str) -> UserProfileRead:
@@ -151,7 +164,7 @@ class ProfileService:
         memories = self.repository.list_memories(user_id)
         history = self.repository.list_requests_for_user(user_id, limit=500)
 
-        return UserProfileRead(
+        bundle = UserProfileRead(
             user_id=profile.user_id,
             display_name=profile.display_name,
             profile_summary=profile.profile_summary,
@@ -171,7 +184,46 @@ class ProfileService:
             else None,
             memory_count=len(memories),
             history_count=len(history),
+            profile_card_path=self._profile_card_path(user_id).as_posix() if self._profile_card_path(user_id).exists() else None,
         )
+        return bundle
+
+    def ensure_profile_card(self, user_id: str, bundle: UserProfileRead | None = None) -> str:
+        """Render and persist the user's Markdown profile card."""
+
+        profile_bundle = bundle or self.get_profile_bundle(user_id)
+        recent_memories = self.repository.list_memories(user_id, limit=5)
+        seen_summaries: set[str] = set()
+        recent_memory_payload: list[dict] = []
+        for memory in recent_memories:
+            if memory.summary in seen_summaries:
+                continue
+            seen_summaries.add(memory.summary)
+            recent_memory_payload.append(
+                {
+                    "category": memory.category,
+                    "summary": memory.summary,
+                }
+            )
+        content = self.card_renderer.render(
+            profile_bundle,
+            recent_memories=recent_memory_payload,
+        )
+        path = write_profile_card(self.settings.profile_card_dir, user_id, content)
+        return path.as_posix()
+
+    def get_profile_card(self, user_id: str) -> dict:
+        """Return the current Markdown profile card and file path."""
+
+        path = self.ensure_profile_card(user_id)
+        return {
+            "user_id": user_id,
+            "path": path,
+            "content": self._profile_card_path(user_id).read_text(encoding="utf-8"),
+        }
+
+    def _profile_card_path(self, user_id: str):
+        return self.settings.profile_card_dir / f"{user_id}.md"
 
     def _rebuild_snapshot(self, user_id: str) -> PreferenceSnapshot:
         memories = self.repository.list_memories(user_id, limit=100)
@@ -201,7 +253,8 @@ class ProfileService:
                 recent_option_counts[memory.category].get(memory.chosen_option_text, 0) + 1
             )
             for tag in memory.tags_json:
-                recent_tag_counts[tag] = recent_tag_counts.get(tag, 0) + 1
+                if _is_meaningful_snapshot_tag(tag):
+                    recent_tag_counts[tag] = recent_tag_counts.get(tag, 0) + 1
 
         top_recent_tags = [tag for tag, _ in sorted(recent_tag_counts.items(), key=lambda item: item[1], reverse=True)[:4]]
         overall_top_tag = next(iter(sorted(all_tag_counts.items(), key=lambda item: item[1], reverse=True)), None)

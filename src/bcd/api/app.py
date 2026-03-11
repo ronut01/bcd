@@ -56,6 +56,13 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    @app.get("/profiles/{user_id}/card")
+    def get_profile_card(user_id: str, session: Session = Depends(get_session)):
+        try:
+            return ProfileService(session).get_profile_card(user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     @app.post("/decisions/predict", response_model=PredictionResponse)
     def predict_choice(payload: DecisionPredictionInput, session: Session = Depends(get_session)):
         try:
