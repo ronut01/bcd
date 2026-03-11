@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import httpx
 
+from bcd.decision.schemas import LLMRuntimeConfig
 from bcd.config import Settings
 from bcd.llm.base import LLMRankingRequest, LLMRankingResult
 
@@ -37,6 +38,15 @@ class OpenAICompatibleLLMRanker:
             base_url=settings.llm_base_url,
             model=settings.llm_model,
             timeout_seconds=settings.llm_timeout_seconds,
+        )
+
+    @classmethod
+    def from_runtime_config(cls, config: LLMRuntimeConfig) -> "OpenAICompatibleLLMRanker":
+        return cls(
+            api_key=config.api_key,
+            base_url=config.base_url,
+            model=config.model,
+            timeout_seconds=config.timeout_seconds,
         )
 
     def rank(self, request: LLMRankingRequest) -> LLMRankingResult | None:

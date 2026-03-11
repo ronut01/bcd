@@ -512,6 +512,31 @@
                 </div>
               </div>
 
+              <div class="stack" style="padding: 16px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface);">
+                <div>
+                  <h3>Optional LLM settings</h3>
+                  <p class="help">If you want `llm` or `hybrid` mode to actually use an LLM, enter an OpenAI-compatible API key and model here. These values are stored only in your browser on this machine.</p>
+                </div>
+                <div class="field">
+                  <label for="llm-api-key">LLM API key</label>
+                  <input id="llm-api-key" type="password" placeholder="sk-..." />
+                </div>
+                <div class="grid-2">
+                  <div class="field">
+                    <label for="llm-base-url">Base URL</label>
+                    <input id="llm-base-url" value="https://api.openai.com/v1" />
+                  </div>
+                  <div class="field">
+                    <label for="llm-model">Model</label>
+                    <input id="llm-model" value="gpt-4.1-mini" />
+                  </div>
+                </div>
+                <div class="button-row">
+                  <button class="secondary" id="save-llm-settings-button" type="button">Save LLM settings</button>
+                  <button class="secondary" id="clear-llm-settings-button" type="button">Clear LLM settings</button>
+                </div>
+              </div>
+
               <div class="button-row">
                 <button class="primary" id="predict-button">Run prediction</button>
                 <button class="secondary" id="reset-button" type="button">Reset example</button>
@@ -607,6 +632,7 @@
       const metricUser = document.getElementById("metric-user");
       const metricMode = document.getElementById("metric-mode");
       const metricConfidence = document.getElementById("metric-confidence");
+      const llmStorageKey = "bcd.llmSettings";
       const onboardingQuestions = [
         {
           question: "How do you usually make everyday choices?",
@@ -677,6 +703,32 @@
         setStatus("Ready. Load the sample profile or run a prediction directly.");
       }
 
+      function getLlmConfig() {
+        const apiKey = document.getElementById("llm-api-key").value.trim();
+        if (!apiKey) {
+          return null;
+        }
+        return {
+          api_key: apiKey,
+          base_url: document.getElementById("llm-base-url").value.trim() || "https://api.openai.com/v1",
+          model: document.getElementById("llm-model").value.trim() || "gpt-4.1-mini",
+          timeout_seconds: 30
+        };
+      }
+
+      function loadSavedLlmSettings() {
+        try {
+          const raw = window.localStorage.getItem(llmStorageKey);
+          if (!raw) return;
+          const config = JSON.parse(raw);
+          document.getElementById("llm-api-key").value = config.api_key || "";
+          document.getElementById("llm-base-url").value = config.base_url || "https://api.openai.com/v1";
+          document.getElementById("llm-model").value = config.model || "gpt-4.1-mini";
+        } catch (_) {
+          window.localStorage.removeItem(llmStorageKey);
+        }
+      }
+
       function getContextPayload() {
         const fields = ["time_of_day", "energy", "weather", "with", "mood", "budget", "urgency"];
         const context = {};
@@ -690,7 +742,7 @@
       }
 
       function getPredictionPayload() {
-        return {
+        const payload = {
           user_id: document.getElementById("user-id").value.trim(),
           prompt: document.getElementById("prompt").value.trim(),
           category: document.getElementById("category").value.trim(),
@@ -701,6 +753,11 @@
             .filter(Boolean)
             .map((optionText) => ({ option_text: optionText }))
         };
+        const llmConfig = getLlmConfig();
+        if (payload.prediction_mode !== "baseline" && llmConfig) {
+          payload.llm_config = llmConfig;
+        }
+        return payload;
       }
 
       async function request(path, options = {}) {
@@ -724,7 +781,7 @@
         predictedOptionText.textContent = prediction.predicted_option_text;
         predictionExplanation.textContent = prediction.explanation;
         strategyChip.textContent = `strategy: ${prediction.strategy}`;
-        llmChip.textContent = `llm used: ${prediction.llm_used ? "yes" : "no"}`;
+        llmChip.textContent = `llm used: ${prediction.llm_used ? `yes (${prediction.llm_provider || "configured"})` : "no"}`;
         metricUser.textContent = document.getElementById("user-id").value.trim();
         metricMode.textContent = prediction.strategy;
         metricConfidence.textContent = `${Math.round(prediction.confidence * 100)}%`;
@@ -787,6 +844,22 @@
 
       document.getElementById("add-option-button").addEventListener("click", () => createOptionRow(""));
       document.getElementById("reset-button").addEventListener("click", resetForm);
+      document.getElementById("save-llm-settings-button").addEventListener("click", () => {
+        const config = getLlmConfig();
+        if (!config) {
+          setStatus("Enter an API key first if you want to save LLM settings.", true);
+          return;
+        }
+        window.localStorage.setItem(llmStorageKey, JSON.stringify(config));
+        setStatus("Saved LLM settings in this browser.");
+      });
+      document.getElementById("clear-llm-settings-button").addEventListener("click", () => {
+        window.localStorage.removeItem(llmStorageKey);
+        document.getElementById("llm-api-key").value = "";
+        document.getElementById("llm-base-url").value = "https://api.openai.com/v1";
+        document.getElementById("llm-model").value = "gpt-4.1-mini";
+        setStatus("Cleared saved LLM settings for this browser.");
+      });
 
       document.getElementById("bootstrap-button").addEventListener("click", async () => {
         try {
@@ -886,6 +959,10 @@
             setStatus("Please provide a user id, a prompt, and at least two options.", true);
             return;
           }
+          if (payload.prediction_mode !== "baseline" && !payload.llm_config) {
+            setStatus("LLM or hybrid mode requires an API key in the LLM settings section.", true);
+            return;
+          }
           setStatus("Running prediction...");
           const prediction = await request("/decisions/predict", {
             method: "POST",
@@ -893,7 +970,11 @@
           });
           renderPrediction(prediction);
           await loadProfileCard();
-          setStatus(`Prediction complete. Top choice: ${prediction.predicted_option_text}`);
+          setStatus(
+            prediction.llm_error
+              ? `Prediction complete with fallback. Top choice: ${prediction.predicted_option_text}`
+              : `Prediction complete. Top choice: ${prediction.predicted_option_text}`
+          );
         } catch (error) {
           setStatus(error.message, true);
         }
@@ -926,6 +1007,7 @@
         }
       });
 
+      loadSavedLlmSettings();
       resetForm();
     </script>
   </body>

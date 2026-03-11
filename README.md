@@ -152,6 +152,11 @@ Supported prediction modes:
 - `llm`: LLM ranking only, with baseline fallback if unavailable
 - `hybrid`: baseline ranking blended with LLM ranking
 
+You can do this either:
+
+- by setting environment variables before starting the server, or
+- directly inside the `/app` browser demo by entering the API key, base URL, and model in the LLM settings section
+
 ## Minimal API flow
 
 ### Bootstrap the sample user

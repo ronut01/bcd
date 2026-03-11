@@ -9,7 +9,7 @@ from typing import Literal
 from sqlmodel import Session
 
 from bcd.config import Settings, get_settings
-from bcd.decision.schemas import DecisionPredictionInput, PredictionResponse, RankedOption
+from bcd.decision.schemas import DecisionPredictionInput, LLMRuntimeConfig, PredictionResponse, RankedOption
 from bcd.llm.base import LLMRankingRequest, LLMRankingResult, LLMRanker, NullLLMRanker
 from bcd.llm.openai_compatible import OpenAICompatibleLLMRanker
 from bcd.memory.retriever import MemoryRetriever, RetrievalQuery
@@ -111,6 +111,7 @@ class DecisionService:
         heuristic_ranked = self._normalize_and_sort(heuristic_scored)
         llm_result, llm_error = self._maybe_rank_with_llm(
             prediction_mode=prediction_mode,
+            payload_llm_config=payload.llm_config,
             prompt=payload.prompt,
             category=payload.category,
             context=payload.context,
@@ -127,6 +128,7 @@ class DecisionService:
             retrieved_memories=retrieved_memories,
         )
         top = ranked[0]
+        llm_provider = llm_result.provider if llm_result else None
 
         prediction = self.repository.add(
             PredictionResult(
@@ -150,6 +152,8 @@ class DecisionService:
             explanation=prediction.explanation,
             strategy=prediction.strategy,
             llm_used=llm_used,
+            llm_provider=llm_provider,
+            llm_error=llm_error,
             profile_card_path=profile_card_path,
             ranked_options=[
                 RankedOption(
@@ -185,6 +189,7 @@ class DecisionService:
     def _maybe_rank_with_llm(
         self,
         prediction_mode: Literal["baseline", "llm", "hybrid"],
+        payload_llm_config: LLMRuntimeConfig | None,
         prompt: str,
         category: str,
         context: dict,
@@ -196,6 +201,8 @@ class DecisionService:
         if prediction_mode == "baseline":
             return None, None
 
+        ranker = self._resolve_llm_ranker(payload_llm_config=payload_llm_config)
+
         request = LLMRankingRequest(
             prompt=prompt,
             category=category,
@@ -206,12 +213,17 @@ class DecisionService:
             heuristic_ranking=[item.option.option_text for item in heuristic_ranked],
         )
         try:
-            result = self.llm_ranker.rank(request)
+            result = ranker.rank(request)
             if result is None:
                 return None, "LLM ranker is not configured."
             return result, None
         except Exception as exc:
             return None, str(exc)
+
+    def _resolve_llm_ranker(self, payload_llm_config: LLMRuntimeConfig | None) -> LLMRanker:
+        if payload_llm_config is not None:
+            return OpenAICompatibleLLMRanker.from_runtime_config(payload_llm_config)
+        return self.llm_ranker
 
     def _resolve_final_ranking(
         self,

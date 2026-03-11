@@ -10,6 +10,13 @@ from pydantic import BaseModel, Field, field_validator
 from bcd.memory.schemas import RetrievedMemory
 
 
+class LLMRuntimeConfig(BaseModel):
+    api_key: str
+    base_url: str = "https://api.openai.com/v1"
+    model: str = "gpt-4.1-mini"
+    timeout_seconds: float = 30.0
+
+
 class DecisionOptionInput(BaseModel):
     option_text: str
     option_metadata: dict = Field(default_factory=dict)
@@ -22,6 +29,7 @@ class DecisionPredictionInput(BaseModel):
     options: list[DecisionOptionInput]
     context: dict = Field(default_factory=dict)
     prediction_mode: Literal["baseline", "llm", "hybrid"] | None = None
+    llm_config: LLMRuntimeConfig | None = None
 
     @field_validator("options")
     @classmethod
@@ -48,6 +56,8 @@ class PredictionResponse(BaseModel):
     explanation: str
     strategy: str
     llm_used: bool = False
+    llm_provider: str | None = None
+    llm_error: str | None = None
     profile_card_path: str | None = None
     ranked_options: list[RankedOption]
     retrieved_memories: list[RetrievedMemory] = Field(default_factory=list)
