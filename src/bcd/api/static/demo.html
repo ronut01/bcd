@@ -367,28 +367,17 @@
                 <div class="stack" style="padding: 16px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface);">
                   <div>
                     <h3>Manual onboarding</h3>
-                    <p class="help">Answer a few short prompts and create a new personalized profile.</p>
+                    <p class="help">Pick an MBTI type and answer a short multiple-choice questionnaire to create a structured cold-start profile.</p>
                   </div>
                   <div class="field">
                     <label for="onboarding-display-name">Display name</label>
                     <input id="onboarding-display-name" placeholder="Your name or alias" />
                   </div>
                   <div class="field">
-                    <label for="onboarding-q1">How do you usually make everyday choices?</label>
-                    <textarea id="onboarding-q1" placeholder="For example: I usually optimize for comfort and reliability."></textarea>
+                    <label for="onboarding-mbti">MBTI</label>
+                    <select id="onboarding-mbti"></select>
                   </div>
-                  <div class="field">
-                    <label for="onboarding-q2">What happens when you are tired or low on energy?</label>
-                    <textarea id="onboarding-q2" placeholder="For example: I default to warm, easy, familiar options."></textarea>
-                  </div>
-                  <div class="field">
-                    <label for="onboarding-q3">How does social context affect your choice?</label>
-                    <textarea id="onboarding-q3" placeholder="For example: With friends I care more about shareable or group-friendly options."></textarea>
-                  </div>
-                  <div class="field">
-                    <label for="onboarding-q4">What kinds of options do you usually prefer or avoid?</label>
-                    <textarea id="onboarding-q4" placeholder="For example: I like structured plans and warm food, but I avoid chaotic or overly heavy options."></textarea>
-                  </div>
+                  <div class="stack" id="onboarding-questionnaire"></div>
                   <div class="button-row">
                     <button class="primary" id="create-profile-button">Create profile from answers</button>
                   </div>
@@ -633,24 +622,7 @@
       const metricMode = document.getElementById("metric-mode");
       const metricConfidence = document.getElementById("metric-confidence");
       const llmStorageKey = "bcd.llmSettings";
-      const onboardingQuestions = [
-        {
-          question: "How do you usually make everyday choices?",
-          id: "onboarding-q1"
-        },
-        {
-          question: "What happens when you are tired or low on energy?",
-          id: "onboarding-q2"
-        },
-        {
-          question: "How does social context affect your choice?",
-          id: "onboarding-q3"
-        },
-        {
-          question: "What kinds of options do you usually prefer or avoid?",
-          id: "onboarding-q4"
-        }
-      ];
+      let onboardingQuestionnaire = null;
 
       let latestPrediction = null;
 
@@ -701,6 +673,51 @@
         predictionContent.classList.add("hidden");
         latestPrediction = null;
         setStatus("Ready. Load the sample profile or run a prediction directly.");
+      }
+
+      function renderOnboardingQuestionnaire(questionnaire) {
+        onboardingQuestionnaire = questionnaire;
+        const mbtiSelect = document.getElementById("onboarding-mbti");
+        mbtiSelect.innerHTML = "";
+        questionnaire.mbti_options.forEach((mbti) => {
+          const option = document.createElement("option");
+          option.value = mbti;
+          option.textContent = mbti;
+          mbtiSelect.appendChild(option);
+        });
+
+        const container = document.getElementById("onboarding-questionnaire");
+        container.innerHTML = "";
+        questionnaire.questions.forEach((question) => {
+          const wrapper = document.createElement("div");
+          wrapper.className = "field";
+          const selectId = `question-${question.question_id}`;
+          wrapper.innerHTML = `
+            <label for="${selectId}">${question.prompt}</label>
+            <select id="${selectId}"></select>
+            <div class="mini" id="${selectId}-description"></div>
+          `;
+          const select = wrapper.querySelector("select");
+          question.options.forEach((option) => {
+            const node = document.createElement("option");
+            node.value = option.option_id;
+            node.textContent = option.label;
+            select.appendChild(node);
+          });
+          const descriptionNode = wrapper.querySelector(`#${selectId}-description`);
+          const updateDescription = () => {
+            const current = question.options.find((item) => item.option_id === select.value);
+            descriptionNode.textContent = current ? current.description : "";
+          };
+          select.addEventListener("change", updateDescription);
+          updateDescription();
+          container.appendChild(wrapper);
+        });
+      }
+
+      async function loadOnboardingQuestionnaire() {
+        const payload = await request("/profiles/onboarding-questionnaire");
+        renderOnboardingQuestionnaire(payload);
       }
 
       function getLlmConfig() {
@@ -877,22 +894,21 @@
       document.getElementById("create-profile-button").addEventListener("click", async () => {
         try {
           const displayName = document.getElementById("onboarding-display-name").value.trim();
-          const answers = onboardingQuestions
-            .map((item) => ({
-              question: item.question,
-              answer: document.getElementById(item.id).value.trim()
-            }))
-            .filter((item) => item.answer);
-          if (!displayName || !answers.length) {
-            setStatus("Enter a display name and at least one onboarding answer.", true);
+          if (!displayName || !onboardingQuestionnaire) {
+            setStatus("Enter a display name and wait for the questionnaire to load.", true);
             return;
           }
-          setStatus("Creating profile from onboarding answers...");
+          const responses = onboardingQuestionnaire.questions.map((question) => ({
+            question_id: question.question_id,
+            option_id: document.getElementById(`question-${question.question_id}`).value
+          }));
+          setStatus("Creating profile from structured onboarding answers...");
           const payload = await request("/profiles/onboard", {
             method: "POST",
             body: JSON.stringify({
               display_name: displayName,
-              answers
+              mbti: document.getElementById("onboarding-mbti").value,
+              responses
             })
           });
           hydrateActiveUser(payload.user_id);
@@ -1008,6 +1024,7 @@
       });
 
       loadSavedLlmSettings();
+      loadOnboardingQuestionnaire().catch((error) => setStatus(error.message, true));
       resetForm();
     </script>
   </body>

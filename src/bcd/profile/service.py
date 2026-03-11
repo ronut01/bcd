@@ -7,17 +7,21 @@ from uuid import uuid4
 from sqlmodel import Session
 
 from bcd.config import Settings, get_settings
-from bcd.profile.card import ProfileCardRenderer, write_profile_card
+from bcd.profile.card import ProfileCardRenderer, write_profile_card, write_state_card
 from bcd.profile.inference import (
     PreferenceSeed,
-    build_preference_profile,
+    build_profile_from_structured_onboarding,
     build_profile_from_chatgpt_export,
+    get_structured_questionnaire,
     load_chatgpt_export,
     slugify_display_name,
 )
 from bcd.profile.sample_data import load_json
 from bcd.profile.schemas import (
     ChatGPTImportResponse,
+    OnboardingQuestionOptionRead,
+    OnboardingQuestionRead,
+    OnboardingQuestionnaireRead,
     PreferenceSnapshotRead,
     UserOnboardingInput,
     UserProfileRead,
@@ -205,17 +209,16 @@ class ProfileService:
     def create_profile_from_onboarding(self, payload: UserOnboardingInput) -> UserProfileRead:
         """Create a new user profile from explicit onboarding answers."""
 
-        if not payload.answers:
-            raise ValueError("At least one onboarding answer is required.")
+        if not payload.responses:
+            raise ValueError("At least one onboarding response is required.")
         user_id = payload.user_id or f"{slugify_display_name(payload.display_name)}-{uuid4().hex[:6]}"
         if self.repository.get_user_profile(user_id):
             raise ValueError(f"User profile '{user_id}' already exists.")
 
-        source_answers = [answer.model_dump(mode="json") for answer in payload.answers]
-        inferred = build_preference_profile(
+        inferred = build_profile_from_structured_onboarding(
             display_name=payload.display_name,
-            source_answers=source_answers,
-            free_texts=[answer.answer for answer in payload.answers],
+            mbti=payload.mbti,
+            responses=[response.model_dump(mode="json") for response in payload.responses],
         )
         self._create_profile_record(
             user_id=user_id,
@@ -229,6 +232,27 @@ class ProfileService:
         bundle = self.get_profile_bundle(user_id)
         self.ensure_profile_card(user_id, bundle=bundle)
         return self.get_profile_bundle(user_id)
+
+    def get_onboarding_questionnaire(self) -> OnboardingQuestionnaireRead:
+        """Return the structured onboarding questionnaire."""
+
+        raw = get_structured_questionnaire()
+        return OnboardingQuestionnaireRead(
+            version=raw["version"],
+            mbti_options=raw["mbti_options"],
+            questions=[
+                OnboardingQuestionRead(
+                    question_id=question["question_id"],
+                    title=question["title"],
+                    prompt=question["prompt"],
+                    options=[
+                        OnboardingQuestionOptionRead(**option)
+                        for option in question["options"]
+                    ],
+                )
+                for question in raw["questions"]
+            ],
+        )
 
     def import_profile_from_chatgpt_export(
         self,
@@ -278,21 +302,42 @@ class ProfileService:
                     "summary": memory.summary,
                 }
             )
-        content = self.card_renderer.render(
+        stable_content, recent_content, combined_content = self.card_renderer.render(
             profile_bundle,
             recent_memories=recent_memory_payload,
         )
-        path = write_profile_card(self.settings.profile_card_dir, user_id, content)
+        path = write_profile_card(self.settings.profile_card_dir, user_id, combined_content)
+        write_state_card(self.settings.profile_card_dir, user_id, recent_content)
         return path.as_posix()
 
     def get_profile_card(self, user_id: str) -> dict:
         """Return the current Markdown profile card and file path."""
 
         path = self.ensure_profile_card(user_id)
+        bundle = self.get_profile_bundle(user_id)
+        recent_memories = self.repository.list_memories(user_id, limit=5)
+        seen_summaries: set[str] = set()
+        recent_memory_payload: list[dict] = []
+        for memory in recent_memories:
+            if memory.summary in seen_summaries:
+                continue
+            seen_summaries.add(memory.summary)
+            recent_memory_payload.append(
+                {
+                    "category": memory.category,
+                    "summary": memory.summary,
+                }
+            )
+        stable_content, recent_content, combined_content = self.card_renderer.render(
+            bundle,
+            recent_memory_payload,
+        )
         return {
             "user_id": user_id,
             "path": path,
-            "content": self._profile_card_path(user_id).read_text(encoding="utf-8"),
+            "content": combined_content,
+            "stable_content": stable_content,
+            "recent_content": recent_content,
         }
 
     def _profile_card_path(self, user_id: str):

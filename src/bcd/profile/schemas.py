@@ -31,15 +31,42 @@ class UserProfileRead(BaseModel):
     profile_card_path: str | None = None
 
 
-class OnboardingAnswerInput(BaseModel):
+class OnboardingQuestionOptionRead(BaseModel):
+    option_id: str
+    label: str
+    description: str
+
+
+class OnboardingQuestionRead(BaseModel):
+    question_id: str
+    title: str
+    prompt: str
+    options: list[OnboardingQuestionOptionRead] = Field(default_factory=list)
+
+
+class OnboardingQuestionnaireRead(BaseModel):
+    version: str
+    mbti_options: list[str] = Field(default_factory=list)
+    questions: list[OnboardingQuestionRead] = Field(default_factory=list)
+
+
+class StructuredOnboardingResponseInput(BaseModel):
+    question_id: str
+    option_id: str
+
+
+class OnboardingAnswerRead(BaseModel):
+    question_id: str
     question: str
+    option_id: str
     answer: str
 
 
 class UserOnboardingInput(BaseModel):
     display_name: str
     user_id: str | None = None
-    answers: list[OnboardingAnswerInput]
+    mbti: str
+    responses: list[StructuredOnboardingResponseInput]
 
 
 class ChatGPTImportResponse(BaseModel):

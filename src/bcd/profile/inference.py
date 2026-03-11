@@ -9,6 +9,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from io import BytesIO
 
+from bcd.profile.questionnaire import MBTI_OPTIONS, STRUCTURED_ONBOARDING_QUESTIONS
 from bcd.utils.text import tokenize
 
 
@@ -135,6 +136,169 @@ def infer_category(text: str) -> str:
             best_category = category
             best_score = score
     return best_category
+
+
+def get_structured_questionnaire() -> dict:
+    """Return the structured onboarding questionnaire definition."""
+
+    return {
+        "version": "v1",
+        "mbti_options": MBTI_OPTIONS,
+        "questions": [
+            {
+                "question_id": question["question_id"],
+                "title": question["title"],
+                "prompt": question["prompt"],
+                "options": [
+                    {
+                        "option_id": option["option_id"],
+                        "label": option["label"],
+                        "description": option["description"],
+                    }
+                    for option in question["options"]
+                ],
+            }
+            for question in STRUCTURED_ONBOARDING_QUESTIONS
+        ],
+    }
+
+
+def build_profile_from_structured_onboarding(
+    display_name: str,
+    mbti: str,
+    responses: list[dict],
+) -> dict:
+    """Build a deterministic starter profile from structured onboarding responses."""
+
+    if mbti not in MBTI_OPTIONS:
+        raise ValueError(f"Unsupported MBTI type '{mbti}'.")
+
+    question_index = {item["question_id"]: item for item in STRUCTURED_ONBOARDING_QUESTIONS}
+    style_counter: Counter[str] = Counter()
+    value_counter: Counter[str] = Counter()
+    category_preferences: dict[str, dict[str, set[str]]] = defaultdict(
+        lambda: {"preferred_keywords": set(), "avoided_keywords": set()}
+    )
+    context_preferences: dict[str, set[str]] = defaultdict(set)
+    behavior_notes: list[str] = []
+    onboarding_answers: list[dict] = []
+    memory_seeds: list[PreferenceSeed] = []
+
+    mbti_effects = {
+        "I": {"decision_style": ["reflective"], "values": ["personal fit"]},
+        "E": {"decision_style": ["social"], "values": ["energy"]},
+        "S": {"decision_style": ["practical"], "values": ["clarity"]},
+        "N": {"decision_style": ["exploratory"], "values": ["curiosity"]},
+        "T": {"decision_style": ["analytical"], "values": ["consistency"]},
+        "F": {"decision_style": ["value-sensitive"], "values": ["personal meaning"]},
+        "J": {"decision_style": ["structured"], "values": ["predictability"]},
+        "P": {"decision_style": ["adaptive"], "values": ["flexibility"]},
+    }
+
+    for letter in mbti:
+        effect = mbti_effects.get(letter)
+        if not effect:
+            continue
+        for style in effect.get("decision_style", []):
+            style_counter[style] += 1
+        for value in effect.get("values", []):
+            value_counter[value] += 1
+
+    for response in responses:
+        question = question_index.get(response["question_id"])
+        if question is None:
+            raise ValueError(f"Unknown onboarding question id '{response['question_id']}'.")
+        option = next((item for item in question["options"] if item["option_id"] == response["option_id"]), None)
+        if option is None:
+            raise ValueError(
+                f"Unknown option id '{response['option_id']}' for question '{response['question_id']}'."
+            )
+
+        onboarding_answers.append(
+            {
+                "question_id": question["question_id"],
+                "question": question["prompt"],
+                "option_id": option["option_id"],
+                "answer": option["label"],
+            }
+        )
+        effects = option.get("effects", {})
+        for style in effects.get("decision_style", []):
+            style_counter[style] += 2
+        for value in effects.get("values", []):
+            value_counter[value] += 2
+        for context_key, values in effects.get("context_preferences", {}).items():
+            context_preferences[context_key].update(values)
+        for category, preference_bundle in effects.get("category_preferences", {}).items():
+            category_preferences[category]["preferred_keywords"].update(
+                preference_bundle.get("preferred_keywords", [])
+            )
+            category_preferences[category]["avoided_keywords"].update(
+                preference_bundle.get("avoided_keywords", [])
+            )
+
+        behavior_notes.append(
+            f"For '{question['title']}', the user selected '{option['label']}'."
+        )
+        derived_category = next(iter(effects.get("category_preferences", {})), "general")
+        memory_seeds.append(
+            PreferenceSeed(
+                category=derived_category,
+                summary=(
+                    f"Structured onboarding signal: for '{question['prompt']}', "
+                    f"the user selected '{option['label']}'."
+                ),
+                chosen_option_text=option["label"],
+                tags=[
+                    question["question_id"],
+                    option["option_id"],
+                    *list(dict.fromkeys(tokenize(option["label"])))[:4],
+                ],
+                context={"source": "structured_onboarding", "mbti": mbti},
+            )
+        )
+
+    if not onboarding_answers:
+        raise ValueError("At least one onboarding response is required.")
+
+    top_styles = [item for item, _ in style_counter.most_common(4)] or ["context-sensitive", "practical"]
+    top_values = [item for item, _ in value_counter.most_common(4)] or ["comfort", "reliability"]
+    category_preferences_payload = {
+        category: {
+            "preferred_keywords": sorted(values["preferred_keywords"]),
+            "avoided_keywords": sorted(values["avoided_keywords"]),
+        }
+        for category, values in category_preferences.items()
+        if values["preferred_keywords"] or values["avoided_keywords"]
+    }
+    context_preferences_payload = {
+        key: sorted(values)
+        for key, values in context_preferences.items()
+        if values
+    }
+    prominent_categories = list(category_preferences_payload)[:3] or ["general"]
+
+    profile_summary = (
+        f"{display_name} has a structured cold-start profile built from MBTI {mbti} and objective preference choices. "
+        f"Current stable signals emphasize {', '.join(top_styles[:3])}, with stronger preference activity around "
+        f"{', '.join(prominent_categories)}. The user appears to optimize for {', '.join(top_values[:3])}."
+    )
+
+    return {
+        "profile_summary": profile_summary,
+        "personality_signals": {
+            "mbti": mbti,
+            "decision_style": top_styles,
+            "values": top_values,
+            "behavior_notes": list(dict.fromkeys(behavior_notes))[:4],
+        },
+        "long_term_preferences": {
+            "category_preferences": category_preferences_payload,
+            "context_preferences": context_preferences_payload,
+        },
+        "onboarding_answers": onboarding_answers,
+        "memory_seeds": memory_seeds[:10],
+    }
 
 
 def build_preference_profile(

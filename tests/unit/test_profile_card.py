@@ -17,5 +17,8 @@ def test_profile_card_is_generated_for_sample_user(configured_env):
     card_path = Path(card["path"])
     assert card_path.exists()
     assert profile.user_id in card["content"]
-    assert "User Preference Card" in card["content"]
+    assert "Stable Profile Card" in card["content"]
+    assert "Recent State Card" in card["content"]
     assert "Representative recent memories" in card["content"]
+    assert "stable_content" in card
+    assert "recent_content" in card

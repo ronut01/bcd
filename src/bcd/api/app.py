@@ -12,7 +12,12 @@ from sqlmodel import Session
 from bcd.config import Settings, get_settings
 from bcd.decision.schemas import DecisionPredictionInput, FeedbackInput, PredictionResponse
 from bcd.decision.service import DecisionService
-from bcd.profile.schemas import ChatGPTImportResponse, UserOnboardingInput, UserProfileRead
+from bcd.profile.schemas import (
+    ChatGPTImportResponse,
+    OnboardingQuestionnaireRead,
+    UserOnboardingInput,
+    UserProfileRead,
+)
 from bcd.profile.service import ProfileService
 from bcd.reflection.service import ReflectionService
 from bcd.storage.database import get_engine, init_db
@@ -60,19 +65,9 @@ def create_app() -> FastAPI:
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    @app.get("/profiles/{user_id}", response_model=UserProfileRead)
-    def get_profile(user_id: str, session: Session = Depends(get_session)):
-        try:
-            return ProfileService(session).get_profile_bundle(user_id)
-        except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-    @app.get("/profiles/{user_id}/card")
-    def get_profile_card(user_id: str, session: Session = Depends(get_session)):
-        try:
-            return ProfileService(session).get_profile_card(user_id)
-        except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+    @app.get("/profiles/onboarding-questionnaire", response_model=OnboardingQuestionnaireRead)
+    def get_onboarding_questionnaire(session: Session = Depends(get_session)):
+        return ProfileService(session).get_onboarding_questionnaire()
 
     @app.post("/profiles/onboard", response_model=UserProfileRead)
     def create_profile_from_onboarding(payload: UserOnboardingInput, session: Session = Depends(get_session)):
@@ -97,6 +92,20 @@ def create_app() -> FastAPI:
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/profiles/{user_id}", response_model=UserProfileRead)
+    def get_profile(user_id: str, session: Session = Depends(get_session)):
+        try:
+            return ProfileService(session).get_profile_bundle(user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.get("/profiles/{user_id}/card")
+    def get_profile_card(user_id: str, session: Session = Depends(get_session)):
+        try:
+            return ProfileService(session).get_profile_card(user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @app.post("/decisions/predict", response_model=PredictionResponse)
     def predict_choice(payload: DecisionPredictionInput, session: Session = Depends(get_session)):

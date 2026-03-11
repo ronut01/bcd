@@ -10,13 +10,12 @@ from bcd.profile.schemas import UserProfileRead
 class ProfileCardRenderer:
     """Render a stable Markdown card summarizing a user's decision tendencies."""
 
-    def render(
+    def render_stable(
         self,
         profile: UserProfileRead,
-        recent_memories: list[dict],
     ) -> str:
         lines = [
-            f"# User Preference Card: {profile.display_name}",
+            f"# Stable Profile Card: {profile.display_name}",
             "",
             f"- User ID: `{profile.user_id}`",
             f"- Profile summary: {profile.profile_summary}",
@@ -40,6 +39,25 @@ class ProfileCardRenderer:
             for key, value in context_preferences.items():
                 lines.append(f"- {key}: {', '.join(value)}")
 
+        if profile.onboarding_answers:
+            lines.extend(["", "## Onboarding answers"])
+            for item in profile.onboarding_answers:
+                lines.append(f"- Q: {item['question']}")
+                lines.append(f"  A: {item['answer']}")
+
+        return "\n".join(lines).strip() + "\n"
+
+    def render_recent_state(
+        self,
+        profile: UserProfileRead,
+        recent_memories: list[dict],
+    ) -> str:
+        lines = [
+            f"# Recent State Card: {profile.display_name}",
+            "",
+            f"- User ID: `{profile.user_id}`",
+        ]
+
         if profile.latest_snapshot:
             lines.extend(
                 [
@@ -54,12 +72,6 @@ class ProfileCardRenderer:
                 )
             if profile.latest_snapshot.drift_markers:
                 lines.append(f"- Drift markers: {'; '.join(profile.latest_snapshot.drift_markers)}")
-
-        if profile.onboarding_answers:
-            lines.extend(["", "## Onboarding answers"])
-            for item in profile.onboarding_answers:
-                lines.append(f"- Q: {item['question']}")
-                lines.append(f"  A: {item['answer']}")
 
         if recent_memories:
             lines.extend(["", "## Representative recent memories"])
@@ -77,11 +89,30 @@ class ProfileCardRenderer:
         )
         return "\n".join(lines).strip() + "\n"
 
+    def render(
+        self,
+        profile: UserProfileRead,
+        recent_memories: list[dict],
+    ) -> tuple[str, str, str]:
+        stable = self.render_stable(profile)
+        recent = self.render_recent_state(profile, recent_memories)
+        combined = f"{stable}\n{recent}"
+        return stable, recent, combined
+
 
 def write_profile_card(card_dir: Path, user_id: str, content: str) -> Path:
     """Write the profile card to disk and return its path."""
 
     card_dir.mkdir(parents=True, exist_ok=True)
     path = card_dir / f"{user_id}.md"
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+def write_state_card(card_dir: Path, user_id: str, content: str) -> Path:
+    """Write the recent-state card to disk and return its path."""
+
+    card_dir.mkdir(parents=True, exist_ok=True)
+    path = card_dir / f"{user_id}.recent.md"
     path.write_text(content, encoding="utf-8")
     return path

@@ -67,6 +67,8 @@ class OpenAICompatibleLLMRanker:
                 "context": request.context,
                 "options": request.options,
                 "profile_card_markdown": request.profile_card_markdown,
+                "stable_profile_markdown": request.stable_profile_markdown,
+                "recent_state_markdown": request.recent_state_markdown,
                 "retrieved_memory_summaries": request.memory_summaries,
                 "heuristic_ranking": request.heuristic_ranking,
                 "requirements": {

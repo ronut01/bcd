@@ -35,6 +35,7 @@ This makes the project a strong foundation for future work in:
 ## MVP capabilities
 
 - bootstrap a sample user profile from lightweight onboarding data
+- initialize new users with `MBTI + structured multiple-choice onboarding`
 - accept a decision prompt with 2-5 candidate options
 - incorporate optional structured context such as time, mood, energy, or social setting
 - retrieve relevant memories and prior decision patterns
@@ -226,7 +227,7 @@ It is intended for someone who wants to try the system quickly without manually 
 
 You can:
 
-- create a profile from manual onboarding answers
+- create a profile from `MBTI + multiple-choice onboarding`
 - import a ChatGPT data export (`.zip` or `conversations.json`) to bootstrap a profile in one step
 - load the sample user profile
 - type a decision question

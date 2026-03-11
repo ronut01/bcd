@@ -11,7 +11,9 @@ from bcd.storage.database import init_db, session_scope
 
 class StubLLMRanker:
     def rank(self, request: LLMRankingRequest) -> LLMRankingResult | None:
-        assert "User Preference Card" in request.profile_card_markdown
+        assert "Stable Profile Card" in request.profile_card_markdown
+        assert request.stable_profile_markdown is not None
+        assert request.recent_state_markdown is not None
         return LLMRankingResult(
             ranked_options=[
                 "Greasy burger",

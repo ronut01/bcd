@@ -20,6 +20,12 @@ def test_api_happy_path(configured_env):
     assert app_response.status_code == 200
     assert "local demo" in app_response.text.lower()
 
+    questionnaire_response = client.get("/profiles/onboarding-questionnaire")
+    assert questionnaire_response.status_code == 200
+    questionnaire_payload = questionnaire_response.json()
+    assert questionnaire_payload["version"] == "v1"
+    assert len(questionnaire_payload["questions"]) >= 5
+
     bootstrap_response = client.post("/profiles/bootstrap-sample")
     assert bootstrap_response.status_code == 200
     user_id = bootstrap_response.json()["user_id"]
@@ -66,14 +72,15 @@ def test_api_happy_path(configured_env):
         "/profiles/onboard",
         json={
             "display_name": "Taylor",
-            "answers": [
+            "mbti": "INTJ",
+            "responses": [
                 {
-                    "question": "How do you usually make everyday choices?",
-                    "answer": "I usually optimize for comfort and reliability."
+                    "question_id": "meal_when_tired",
+                    "option_id": "warm_comfort"
                 },
                 {
-                    "question": "What kinds of options do you usually prefer or avoid?",
-                    "answer": "I prefer warm food and structured plans, and I avoid chaotic options."
+                    "question_id": "planning_style",
+                    "option_id": "checklist"
                 }
             ]
         },

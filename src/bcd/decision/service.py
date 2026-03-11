@@ -95,7 +95,8 @@ class DecisionService:
             else None
         )
         profile_card_path = self.profile_service.ensure_profile_card(payload.user_id)
-        profile_card_markdown = self.profile_service.get_profile_card(payload.user_id)["content"]
+        profile_card_payload = self.profile_service.get_profile_card(payload.user_id)
+        profile_card_markdown = profile_card_payload["content"]
 
         heuristic_scored = [
             self._score_option(
@@ -118,6 +119,8 @@ class DecisionService:
             options=options,
             retrieved_memories=retrieved_memories,
             profile_card_markdown=profile_card_markdown,
+            stable_profile_markdown=profile_card_payload.get("stable_content"),
+            recent_state_markdown=profile_card_payload.get("recent_content"),
             heuristic_ranked=heuristic_ranked,
         )
         ranked, strategy, explanation, llm_used = self._resolve_final_ranking(
@@ -196,6 +199,8 @@ class DecisionService:
         options: list[DecisionOption],
         retrieved_memories,
         profile_card_markdown: str,
+        stable_profile_markdown: str | None,
+        recent_state_markdown: str | None,
         heuristic_ranked: list[_OptionScore],
     ) -> tuple[LLMRankingResult | None, str | None]:
         if prediction_mode == "baseline":
@@ -210,6 +215,8 @@ class DecisionService:
             options=[option.option_text for option in options],
             memory_summaries=[memory.summary for memory in retrieved_memories],
             profile_card_markdown=profile_card_markdown,
+            stable_profile_markdown=stable_profile_markdown,
+            recent_state_markdown=recent_state_markdown,
             heuristic_ranking=[item.option.option_text for item in heuristic_ranked],
         )
         try:
