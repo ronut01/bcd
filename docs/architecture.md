@@ -1,5 +1,19 @@
 # Architecture
 
+```mermaid
+flowchart TD
+    A["UserProfile"] --> B["DecisionService"]
+    B --> C["DecisionRequest + Options"]
+    C --> D["MemoryRetriever"]
+    A --> D
+    D --> E["Heuristic Predictor"]
+    E --> F["PredictionResult"]
+    F --> G["ActualChoiceFeedback"]
+    G --> H["MemoryEntry"]
+    H --> I["PreferenceSnapshot"]
+    I --> E
+```
+
 ## System goals
 
 The MVP focuses on a single-user, local-first decision prediction workflow:
