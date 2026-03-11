@@ -1,0 +1,49 @@
+{
+  "user_id": "sample-alex",
+  "display_name": "Alex Chen",
+  "profile_summary": "Alex usually favors practical, familiar, and energy-aware choices. When tired, Alex tends to pick warm food, cozy plans, and low-friction options. With friends, Alex becomes more open to social or shareable activities.",
+  "personality_signals": {
+    "decision_style": ["practical", "habit-driven", "context-sensitive"],
+    "values": ["comfort", "reliability", "efficiency"],
+    "behavior_notes": [
+      "Defaults to familiar choices when energy is low",
+      "Responds strongly to time pressure and budget context"
+    ]
+  },
+  "long_term_preferences": {
+    "category_preferences": {
+      "food": {
+        "preferred_keywords": ["ramen", "soup", "rice", "warm", "familiar", "noodle", "tea", "stew"],
+        "avoided_keywords": ["greasy", "heavy", "spicy", "adventurous"]
+      },
+      "entertainment": {
+        "preferred_keywords": ["drama", "cozy", "familiar", "short", "comedy", "character"],
+        "avoided_keywords": ["gory", "intense", "very long"]
+      },
+      "study": {
+        "preferred_keywords": ["structured", "incremental", "practical", "checklist", "focused"],
+        "avoided_keywords": ["open-ended", "chaotic", "overly ambitious"]
+      }
+    },
+    "context_preferences": {
+      "energy_low": ["warm", "familiar", "easy", "cozy", "close"],
+      "energy_high": ["explore", "active", "ambitious"],
+      "with_friends": ["shareable", "social", "group", "active"],
+      "budget_sensitive": ["cheap", "affordable", "practical", "value"]
+    }
+  },
+  "onboarding_answers": [
+    {
+      "question": "What do you usually optimize for when making everyday choices?",
+      "answer": "Comfort and reliability."
+    },
+    {
+      "question": "What happens when you are tired?",
+      "answer": "I choose the safest and easiest familiar option."
+    },
+    {
+      "question": "How does social context affect your choice?",
+      "answer": "I become more flexible and pick things that work well for the group."
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+[
+  {
+    "prompt": "Pick tonight's dinner after a tiring commute.",
+    "category": "food",
+    "context": {
+      "time_of_day": "night",
+      "energy": "low",
+      "weather": "cold",
+      "with": "alone"
+    },
+    "options": [
+      {"option_text": "Warm noodle soup"},
+      {"option_text": "Greasy cheeseburger"},
+      {"option_text": "Raw vegetable platter"}
+    ],
+    "actual_option_text": "Warm noodle soup"
+  },
+  {
+    "prompt": "Pick something to watch on a calm evening.",
+    "category": "entertainment",
+    "context": {
+      "time_of_day": "evening",
+      "energy": "low",
+      "mood": "calm"
+    },
+    "options": [
+      {"option_text": "A cozy relationship drama"},
+      {"option_text": "A graphic horror film"},
+      {"option_text": "A four-hour historical documentary"}
+    ],
+    "actual_option_text": "A cozy relationship drama"
+  },
+  {
+    "prompt": "Choose a plan for a focused study block.",
+    "category": "study",
+    "context": {
+      "time_of_day": "afternoon",
+      "energy": "medium",
+      "urgency": "high"
+    },
+    "options": [
+      {"option_text": "Follow a structured review checklist"},
+      {"option_text": "Try three unrelated experiments at once"},
+      {"option_text": "Watch random videos"}
+    ],
+    "actual_option_text": "Follow a structured review checklist"
+  }
+]

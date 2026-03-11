@@ -1,0 +1,78 @@
+[
+  {
+    "prompt": "Pick a dinner after a long workday.",
+    "category": "food",
+    "context": {
+      "time_of_day": "night",
+      "energy": "low",
+      "weather": "rainy",
+      "with": "alone",
+      "budget": "medium"
+    },
+    "options": [
+      {"option_text": "Spicy fried chicken"},
+      {"option_text": "Warm ramen near home"},
+      {"option_text": "Cold salad bowl"}
+    ],
+    "predicted_option_text": "Warm ramen near home",
+    "actual_option_text": "Warm ramen near home",
+    "reason_text": "Wanted something warm and familiar without much effort.",
+    "reason_tags": ["warm", "familiar", "low_energy"]
+  },
+  {
+    "prompt": "Choose a movie for a quiet Sunday evening.",
+    "category": "entertainment",
+    "context": {
+      "time_of_day": "evening",
+      "energy": "low",
+      "mood": "calm",
+      "with": "partner"
+    },
+    "options": [
+      {"option_text": "A three-hour war epic"},
+      {"option_text": "A cozy character drama"},
+      {"option_text": "An intense horror film"}
+    ],
+    "predicted_option_text": "A cozy character drama",
+    "actual_option_text": "A cozy character drama",
+    "reason_text": "Wanted something emotionally engaging but not exhausting.",
+    "reason_tags": ["cozy", "calm", "familiar"]
+  },
+  {
+    "prompt": "Pick a weekend study plan.",
+    "category": "study",
+    "context": {
+      "time_of_day": "morning",
+      "energy": "medium",
+      "urgency": "high"
+    },
+    "options": [
+      {"option_text": "Read five unrelated papers"},
+      {"option_text": "Follow a structured two-hour checklist"},
+      {"option_text": "Jump into an open-ended side project"}
+    ],
+    "predicted_option_text": "Follow a structured two-hour checklist",
+    "actual_option_text": "Follow a structured two-hour checklist",
+    "reason_text": "Needed something focused and realistic.",
+    "reason_tags": ["structured", "practical", "urgent"]
+  },
+  {
+    "prompt": "Choose dinner with friends visiting town.",
+    "category": "food",
+    "context": {
+      "time_of_day": "night",
+      "energy": "medium",
+      "with": "friends",
+      "budget": "medium"
+    },
+    "options": [
+      {"option_text": "Shareable hotpot restaurant"},
+      {"option_text": "Solo ramen counter"},
+      {"option_text": "Expensive tasting menu"}
+    ],
+    "predicted_option_text": "Shareable hotpot restaurant",
+    "actual_option_text": "Shareable hotpot restaurant",
+    "reason_text": "Wanted something social and easy for the whole group.",
+    "reason_tags": ["social", "shareable", "friends"]
+  }
+]
