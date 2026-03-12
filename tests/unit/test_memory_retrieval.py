@@ -24,3 +24,6 @@ def test_retriever_prioritizes_matching_food_memories(configured_env):
     assert memories
     assert memories[0].category == "food"
     assert "warm" in memories[0].summary.lower() or "ramen" in memories[0].chosen_option_text.lower()
+    assert memories[0].retrieval_components
+    assert memories[0].why_retrieved
+    assert memories[0].memory_role in {"direct_match", "supporting", "context_match", "recent_repeat"}

@@ -56,7 +56,7 @@ class OpenAICompatibleLLMRanker:
 
         system_prompt = (
             "You predict which option a specific user is most likely to choose in practice. "
-            "Use retrieved memories as the strongest evidence, then current context, then stable profile signals. "
+            "Use retrieved memories as the strongest evidence, then recent state, then current context, then stable profile signals. "
             "Treat the heuristic ranking as a weak prior, not as ground truth. "
             "Do not recommend the objectively best option unless it is also the most likely human choice. "
             "Return strict JSON with keys ranked_options and explanation."
@@ -79,6 +79,13 @@ class OpenAICompatibleLLMRanker:
                     "rank_all_options": True,
                     "top_choice_should_reflect_user_likelihood": True,
                     "ground_explanation_in_recent_memories_and_context": True,
+                    "priority_order": [
+                        "retrieved memories",
+                        "recent state",
+                        "current context",
+                        "stable profile",
+                        "heuristic prior"
+                    ],
                     "output_json_only": True,
                 },
                 "output_schema": {

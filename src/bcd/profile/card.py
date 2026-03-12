@@ -54,6 +54,7 @@ class ProfileCardRenderer:
         profile: UserProfileRead,
         recent_memories: list[dict],
         manual_recent_notes: list[str] | None = None,
+        feedback_shift_notes: list[str] | None = None,
     ) -> str:
         lines = [
             f"# Recent State Card: {profile.display_name}",
@@ -81,6 +82,11 @@ class ProfileCardRenderer:
             for note in manual_recent_notes[:5]:
                 lines.append(f"- {note}")
 
+        if feedback_shift_notes:
+            lines.extend(["", "## Feedback-derived shift markers"])
+            for note in feedback_shift_notes[:5]:
+                lines.append(f"- {note}")
+
         if recent_memories:
             lines.extend(["", "## Representative recent memories"])
             for memory in recent_memories[:5]:
@@ -102,9 +108,15 @@ class ProfileCardRenderer:
         profile: UserProfileRead,
         recent_memories: list[dict],
         manual_recent_notes: list[str] | None = None,
+        feedback_shift_notes: list[str] | None = None,
     ) -> tuple[str, str, str]:
         stable = self.render_stable(profile)
-        recent = self.render_recent_state(profile, recent_memories, manual_recent_notes=manual_recent_notes)
+        recent = self.render_recent_state(
+            profile,
+            recent_memories,
+            manual_recent_notes=manual_recent_notes,
+            feedback_shift_notes=feedback_shift_notes,
+        )
         combined = f"{stable}\n{recent}"
         return stable, recent, combined
 

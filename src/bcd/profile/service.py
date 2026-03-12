@@ -22,6 +22,7 @@ from bcd.profile.schemas import (
     OnboardingQuestionOptionRead,
     OnboardingQuestionRead,
     OnboardingQuestionnaireRead,
+    OnboardingPreviewRead,
     ProfileSignalRead,
     ProfileSignalReviewInput,
     ProfileSignalReviewResponse,
@@ -298,6 +299,23 @@ class ProfileService:
         self.ensure_profile_card(user_id, bundle=bundle)
         return self.get_profile_bundle(user_id)
 
+    def preview_onboarding_profile(self, payload: UserOnboardingInput) -> OnboardingPreviewRead:
+        """Preview the structured profile that onboarding answers would produce."""
+
+        if not payload.responses:
+            raise ValueError("At least one onboarding response is required.")
+        inferred = build_profile_from_structured_onboarding(
+            display_name=payload.display_name,
+            mbti=payload.mbti,
+            responses=[response.model_dump(mode="json") for response in payload.responses],
+        )
+        return OnboardingPreviewRead(
+            display_name=payload.display_name,
+            profile_summary=inferred["profile_summary"],
+            personality_signals=inferred["personality_signals"],
+            long_term_preferences=inferred["long_term_preferences"],
+        )
+
     def get_onboarding_questionnaire(self) -> OnboardingQuestionnaireRead:
         """Return the structured onboarding questionnaire."""
 
@@ -457,7 +475,7 @@ class ProfileService:
         """Render and persist the user's Markdown profile card."""
 
         profile_bundle = bundle or self.get_profile_bundle(user_id)
-        manual_recent_notes = [note.note_text for note in self.repository.list_recent_state_notes(user_id, limit=5)]
+        recent_state_payload = self.get_recent_state_payload(user_id)
         recent_memories = self.repository.list_memories(user_id, limit=5)
         seen_summaries: set[str] = set()
         recent_memory_payload: list[dict] = []
@@ -474,7 +492,8 @@ class ProfileService:
         stable_content, recent_content, combined_content = self.card_renderer.render(
             profile_bundle,
             recent_memories=recent_memory_payload,
-            manual_recent_notes=manual_recent_notes,
+            manual_recent_notes=recent_state_payload["manual_notes"],
+            feedback_shift_notes=recent_state_payload["feedback_shift_notes"],
         )
         path = write_profile_card(self.settings.profile_card_dir, user_id, combined_content)
         write_state_card(self.settings.profile_card_dir, user_id, recent_content)
@@ -485,7 +504,7 @@ class ProfileService:
 
         path = self.ensure_profile_card(user_id)
         bundle = self.get_profile_bundle(user_id)
-        manual_recent_notes = [note.note_text for note in self.repository.list_recent_state_notes(user_id, limit=5)]
+        recent_state_payload = self.get_recent_state_payload(user_id)
         recent_memories = self.repository.list_memories(user_id, limit=5)
         seen_summaries: set[str] = set()
         recent_memory_payload: list[dict] = []
@@ -502,7 +521,8 @@ class ProfileService:
         stable_content, recent_content, combined_content = self.card_renderer.render(
             bundle,
             recent_memory_payload,
-            manual_recent_notes=manual_recent_notes,
+            manual_recent_notes=recent_state_payload["manual_notes"],
+            feedback_shift_notes=recent_state_payload["feedback_shift_notes"],
         )
         return {
             "user_id": user_id,
@@ -510,6 +530,31 @@ class ProfileService:
             "content": combined_content,
             "stable_content": stable_content,
             "recent_content": recent_content,
+            "stable_summary": {
+                "signal_count": bundle.signal_count,
+                "pending_signal_count": bundle.pending_signal_count,
+                "decision_style": bundle.personality_signals.get("decision_style", []),
+                "values": bundle.personality_signals.get("values", []),
+            },
+            "recent_summary": recent_state_payload,
+        }
+
+    def get_recent_state_payload(self, user_id: str) -> dict:
+        """Return a structured view of recent state separate from the stable profile."""
+
+        snapshot = self.repository.get_latest_snapshot(user_id)
+        manual_notes = [note.note_text for note in self.repository.list_recent_state_notes(user_id, limit=5)]
+        snapshot_notes = snapshot.short_term_preference_notes_json if snapshot else []
+        drift_markers = snapshot.drift_markers_json if snapshot else []
+        feedback_shift_notes = []
+        if snapshot:
+            feedback_shift_notes = snapshot.derived_statistics_json.get("recent_shift_notes", [])
+        return {
+            "manual_notes": manual_notes,
+            "snapshot_notes": snapshot_notes,
+            "drift_markers": drift_markers,
+            "feedback_shift_notes": feedback_shift_notes,
+            "combined_notes": list(dict.fromkeys(manual_notes + snapshot_notes + feedback_shift_notes)),
         }
 
     def _profile_card_path(self, user_id: str):
@@ -799,6 +844,9 @@ class ProfileService:
 
     def _rebuild_snapshot(self, user_id: str) -> PreferenceSnapshot:
         memories = self.repository.list_memories(user_id, limit=100)
+        recent_requests = self.repository.list_requests_for_user(user_id, limit=20)
+        request_ids = [request.request_id for request in recent_requests]
+        recent_reflections = self.repository.list_reflections_for_requests(request_ids)
         if not memories:
             return PreferenceSnapshot(
                 user_id=user_id,
@@ -813,11 +861,19 @@ class ProfileService:
         recent_tag_counts: dict[str, int] = {}
         recent_option_counts: dict[str, dict[str, int]] = {}
         all_tag_counts: dict[str, int] = {}
+        recent_shift_notes: list[str] = []
+        recent_failure_reasons: dict[str, int] = {}
 
         for memory in memories:
             category_counts[memory.category] = category_counts.get(memory.category, 0) + 1
             for tag in memory.tags_json:
                 all_tag_counts[tag] = all_tag_counts.get(tag, 0) + 1
+
+        for reflection in recent_reflections[:5]:
+            if reflection.preference_shift_note:
+                recent_shift_notes.append(reflection.preference_shift_note)
+            for reason in reflection.failure_reasons_json:
+                recent_failure_reasons[reason] = recent_failure_reasons.get(reason, 0) + 1
 
         for memory in recent_memories:
             recent_option_counts.setdefault(memory.category, {})
@@ -837,23 +893,29 @@ class ProfileService:
             drift_markers.append(
                 f"Recent choices emphasize '{recent_top_tag[0]}' more than the longer-term pattern '{overall_top_tag[0]}'."
             )
+        if recent_shift_notes:
+            drift_markers.append("Recent feedback suggests at least one temporary preference shift is active.")
 
         summary_parts = [
             f"Recent decisions show the strongest activity in {max(category_counts, key=category_counts.get)}.",
         ]
         if top_recent_tags:
             summary_parts.append(f"Short-term signals currently emphasize {', '.join(top_recent_tags[:3])}.")
+        if recent_shift_notes:
+            summary_parts.append("Feedback-derived shift markers are influencing the short-term state.")
 
         return PreferenceSnapshot(
             user_id=user_id,
             summary=" ".join(summary_parts),
             short_term_preference_notes_json=[
                 f"Recent choices repeatedly include '{tag}'." for tag in top_recent_tags[:3]
-            ],
+            ] + [f"Recent feedback shift: {note}" for note in recent_shift_notes[:2]],
             drift_markers_json=drift_markers,
             derived_statistics_json={
                 "category_counts": category_counts,
                 "recent_option_counts": recent_option_counts,
                 "recent_tags": top_recent_tags,
+                "recent_shift_notes": recent_shift_notes[:5],
+                "recent_failure_reasons": recent_failure_reasons,
             },
         )

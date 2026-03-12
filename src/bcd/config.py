@@ -22,6 +22,7 @@ class Settings:
     project_root: Path
     database_url: str
     retrieval_top_k: int
+    retrieval_backend: Literal["lexical", "semantic", "hybrid"]
     prediction_mode: Literal["baseline", "llm", "hybrid"]
     llm_api_key: str | None
     llm_base_url: str
@@ -41,6 +42,7 @@ def get_settings() -> Settings:
         project_root=project_root,
         database_url=os.getenv("BCD_DATABASE_URL", "sqlite:///./data/runtime/bcd.sqlite"),
         retrieval_top_k=int(os.getenv("BCD_RETRIEVAL_TOP_K", "5")),
+        retrieval_backend=os.getenv("BCD_RETRIEVAL_BACKEND", "lexical").lower(),  # type: ignore[arg-type]
         prediction_mode=os.getenv("BCD_PREDICTION_MODE", "baseline").lower(),  # type: ignore[arg-type]
         llm_api_key=os.getenv("BCD_LLM_API_KEY") or None,
         llm_base_url=os.getenv("BCD_LLM_BASE_URL", "https://api.openai.com/v1"),

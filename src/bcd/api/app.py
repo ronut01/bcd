@@ -15,6 +15,7 @@ from bcd.decision.service import DecisionService
 from bcd.profile.schemas import (
     ChatGPTImportResponse,
     OnboardingQuestionnaireRead,
+    OnboardingPreviewRead,
     ProfileSignalRead,
     ProfileSignalReviewInput,
     ProfileSignalReviewResponse,
@@ -78,6 +79,13 @@ def create_app() -> FastAPI:
     def create_profile_from_onboarding(payload: UserOnboardingInput, session: Session = Depends(get_session)):
         try:
             return ProfileService(session).create_profile_from_onboarding(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/profiles/onboard/preview", response_model=OnboardingPreviewRead)
+    def preview_profile_from_onboarding(payload: UserOnboardingInput, session: Session = Depends(get_session)):
+        try:
+            return ProfileService(session).preview_onboarding_profile(payload)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

@@ -39,7 +39,7 @@ This makes the project a strong foundation for future work in:
 - accept a decision prompt with 2-5 candidate options
 - incorporate optional structured context such as time, mood, energy, or social setting
 - retrieve relevant memories and prior decision patterns
-- predict the most likely user choice with confidence and explanation
+- predict the most likely user choice with confidence, structured explanation sections, and option-by-option score breakdowns
 - log actual user feedback and reasons
 - review, accept, reject, or edit extracted profile signals
 - add and remove manual recent-state notes separately from stable profile signals
@@ -216,8 +216,9 @@ The demo returns:
 
 - a predicted top option
 - ranked alternatives with confidences
-- retrieved memories used as supporting evidence
-- a short explanation grounded in profile and history
+- component-level scoring breakdowns for each option
+- retrieved memories with retrieval roles and explanation cues
+- structured explanation sections grounded in stable profile, recent state, and history
 - feedback-driven memory and snapshot updates
 
 This keeps the system interpretable enough for debugging while still showing a complete personalized decision loop.
@@ -246,6 +247,7 @@ You can:
 
 - `POST /profiles/bootstrap-sample`
 - `POST /profiles/onboard`
+- `POST /profiles/onboard/preview`
 - `POST /profiles/import-chatgpt-export`
 - `GET /profiles/{user_id}/signals`
 - `POST /profiles/{user_id}/signals/{signal_id}/review`

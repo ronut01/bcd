@@ -298,6 +298,35 @@
         color: var(--muted);
       }
 
+      .section-tag {
+        display: inline-flex;
+        margin-bottom: 10px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .evidence-list,
+      .component-grid {
+        display: grid;
+        gap: 8px;
+      }
+
+      .component-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .component-chip {
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: var(--surface-strong);
+      }
+
       .mini {
         font-size: 0.9rem;
         color: var(--muted);
@@ -365,7 +394,8 @@
       <section class="layout">
         <div class="stack">
           <article class="panel">
-            <h2>Choose a starting point</h2>
+            <span class="section-tag">Step 1</span>
+            <h2>Create or load a user</h2>
             <p class="help">You can test the system with the built-in sample user, create a profile manually, or import a ChatGPT export to infer a profile automatically.</p>
             <div class="stack" style="margin-top: 16px;">
               <div class="button-row">
@@ -389,7 +419,12 @@
                     <select id="onboarding-mbti"></select>
                   </div>
                   <div class="stack" id="onboarding-questionnaire"></div>
+                  <div class="field">
+                    <label>Structured profile preview</label>
+                    <pre id="onboarding-preview-output">Preview the stable profile that these answers would create.</pre>
+                  </div>
                   <div class="button-row">
+                    <button class="secondary" id="preview-profile-button">Preview profile</button>
                     <button class="primary" id="create-profile-button">Create profile from answers</button>
                   </div>
                 </div>
@@ -420,7 +455,8 @@
           </article>
 
           <article class="panel">
-            <h2>Decision input</h2>
+            <span class="section-tag">Step 4</span>
+            <h2>Ask a decision</h2>
             <p class="help">Use the default sample user or change the advanced fields if you want to test different modes.</p>
             <div class="stack" style="margin-top: 16px;">
               <div class="grid-2">
@@ -546,7 +582,8 @@
           </article>
 
           <article class="panel hidden" id="feedback-panel">
-            <h2>Feedback</h2>
+            <span class="section-tag">Step 6</span>
+            <h2>Give feedback</h2>
             <p class="help">After a prediction, record the actual choice, why the system missed, and any context shift so both memory and analysis update.</p>
             <div class="stack" style="margin-top: 16px;">
               <div class="field">
@@ -582,7 +619,8 @@
 
         <div class="stack">
           <article class="panel">
-            <h2>Prediction result</h2>
+            <span class="section-tag">Step 5</span>
+            <h2>Inspect the prediction</h2>
             <div id="prediction-empty" class="note">No prediction yet. Run the form on the left to see a result.</div>
             <div id="prediction-content" class="stack hidden">
               <div class="prediction-hero">
@@ -594,8 +632,28 @@
                 </div>
               </div>
               <div>
-                <h3>Explanation</h3>
+                <h3>Top choice summary</h3>
                 <p class="help" id="prediction-explanation"></p>
+              </div>
+              <div class="grid-2">
+                <div>
+                  <h3>Why this option</h3>
+                  <div class="evidence-list" id="top-choice-evidence"></div>
+                </div>
+                <div>
+                  <h3>Recent state that mattered</h3>
+                  <div class="evidence-list" id="recent-state-evidence"></div>
+                </div>
+              </div>
+              <div class="grid-2">
+                <div>
+                  <h3>Memories that mattered</h3>
+                  <div class="evidence-list" id="memory-explanation-list"></div>
+                </div>
+                <div>
+                  <h3>Why other options lost</h3>
+                  <div class="evidence-list" id="why-others-lost-list"></div>
+                </div>
               </div>
               <div>
                 <h3>Ranked options</h3>
@@ -609,7 +667,8 @@
           </article>
 
           <article class="panel">
-            <h2>Inspector</h2>
+            <span class="section-tag">Step 2</span>
+            <h2>Review stable profile</h2>
             <p class="help">This keeps the structured research artifacts visible while offering a friendlier UI.</p>
             <div class="stack" style="margin-top: 16px;">
               <div>
@@ -617,10 +676,15 @@
                 <pre id="profile-card-output">Profile card output will appear here.</pre>
               </div>
               <div>
+                <h3>Recent state summary</h3>
+                <pre id="recent-state-summary-output">Recent state summary will appear here.</pre>
+              </div>
+              <div>
                 <h3>Recent history</h3>
                 <pre id="history-output">Recent history will appear here.</pre>
               </div>
               <div>
+                <span class="section-tag">Step 3</span>
                 <h3>Recent state notes</h3>
                 <div class="stack">
                   <div class="field">
@@ -654,13 +718,19 @@
       const actualOptionSelect = document.getElementById("actual-option");
       const predictedOptionText = document.getElementById("predicted-option-text");
       const predictionExplanation = document.getElementById("prediction-explanation");
+      const topChoiceEvidence = document.getElementById("top-choice-evidence");
+      const recentStateEvidence = document.getElementById("recent-state-evidence");
+      const memoryExplanationList = document.getElementById("memory-explanation-list");
+      const whyOthersLostList = document.getElementById("why-others-lost-list");
       const strategyChip = document.getElementById("strategy-chip");
       const llmChip = document.getElementById("llm-chip");
       const rankList = document.getElementById("rank-list");
       const memoryList = document.getElementById("memory-list");
       const predictionEmpty = document.getElementById("prediction-empty");
       const predictionContent = document.getElementById("prediction-content");
+      const onboardingPreviewOutput = document.getElementById("onboarding-preview-output");
       const profileCardOutput = document.getElementById("profile-card-output");
+      const recentStateSummaryOutput = document.getElementById("recent-state-summary-output");
       const historyOutput = document.getElementById("history-output");
       const signalList = document.getElementById("signal-list");
       const recentStateList = document.getElementById("recent-state-list");
@@ -754,6 +824,8 @@
         latestPrediction = null;
         signalList.innerHTML = `<div class="signal-item"><div class="mini">Profile signals will appear here.</div></div>`;
         recentStateList.innerHTML = `<div class="signal-item"><div class="mini">Recent-state notes will appear here.</div></div>`;
+        recentStateSummaryOutput.textContent = "Recent state summary will appear here.";
+        onboardingPreviewOutput.textContent = "Preview the stable profile that these answers would create.";
         setStatus("Ready. Load the sample profile or run a prediction directly.");
       }
 
@@ -795,6 +867,21 @@
           updateDescription();
           container.appendChild(wrapper);
         });
+      }
+
+      async function previewOnboardingProfile() {
+        const payload = getOnboardingPayload();
+        if (!payload || !payload.display_name) {
+          setStatus("Enter a display name before previewing the profile.", true);
+          return;
+        }
+        setStatus("Previewing structured profile...");
+        const preview = await request("/profiles/onboard/preview", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        });
+        onboardingPreviewOutput.textContent = JSON.stringify(preview, null, 2);
+        setStatus("Structured profile preview updated.");
       }
 
       async function loadOnboardingQuestionnaire() {
@@ -859,6 +946,19 @@
         return payload;
       }
 
+      function getOnboardingPayload() {
+        if (!onboardingQuestionnaire) return null;
+        const displayName = document.getElementById("onboarding-display-name").value.trim();
+        return {
+          display_name: displayName,
+          mbti: document.getElementById("onboarding-mbti").value,
+          responses: onboardingQuestionnaire.questions.map((question) => ({
+            question_id: question.question_id,
+            option_id: document.getElementById(`question-${question.question_id}`).value
+          }))
+        };
+      }
+
       async function request(path, options = {}) {
         const isFormData = options.body instanceof FormData;
         const response = await fetch(path, {
@@ -878,21 +978,75 @@
         predictionContent.classList.remove("hidden");
         feedbackPanel.classList.remove("hidden");
         predictedOptionText.textContent = prediction.predicted_option_text;
-        predictionExplanation.textContent = prediction.explanation;
+        predictionExplanation.textContent = prediction.explanation_sections.top_choice_summary;
         strategyChip.textContent = `strategy: ${prediction.strategy}`;
         llmChip.textContent = `llm used: ${prediction.llm_used ? `yes (${prediction.llm_provider || "configured"})` : "no"}`;
         metricUser.textContent = document.getElementById("user-id").value.trim();
         metricMode.textContent = prediction.strategy;
         metricConfidence.textContent = `${Math.round(prediction.confidence * 100)}%`;
 
+        topChoiceEvidence.innerHTML = "";
+        (prediction.explanation_sections.why_this_option || []).forEach((item) => {
+          const node = document.createElement("div");
+          node.className = "signal-item";
+          node.innerHTML = `<div class="mini">${item}</div>`;
+          topChoiceEvidence.appendChild(node);
+        });
+        if (!(prediction.explanation_sections.why_this_option || []).length) {
+          topChoiceEvidence.innerHTML = `<div class="signal-item"><div class="mini">No strong top-choice evidence was returned.</div></div>`;
+        }
+
+        recentStateEvidence.innerHTML = "";
+        (prediction.explanation_sections.what_recent_state_mattered || []).forEach((item) => {
+          const node = document.createElement("div");
+          node.className = "signal-item";
+          node.innerHTML = `<div class="mini">${item}</div>`;
+          recentStateEvidence.appendChild(node);
+        });
+        if (!(prediction.explanation_sections.what_recent_state_mattered || []).length) {
+          recentStateEvidence.innerHTML = `<div class="signal-item"><div class="mini">No recent-state evidence was returned.</div></div>`;
+        }
+
+        memoryExplanationList.innerHTML = "";
+        (prediction.explanation_sections.what_memories_mattered || []).forEach((item) => {
+          const node = document.createElement("div");
+          node.className = "signal-item";
+          node.innerHTML = `<div class="mini">${item}</div>`;
+          memoryExplanationList.appendChild(node);
+        });
+        if (!(prediction.explanation_sections.what_memories_mattered || []).length) {
+          memoryExplanationList.innerHTML = `<div class="signal-item"><div class="mini">No memory explanation was returned.</div></div>`;
+        }
+
+        whyOthersLostList.innerHTML = "";
+        (prediction.explanation_sections.why_other_options_lost || []).forEach((item) => {
+          const node = document.createElement("div");
+          node.className = "signal-item";
+          node.innerHTML = `<div class="mini">${item}</div>`;
+          whyOthersLostList.appendChild(node);
+        });
+        if (!(prediction.explanation_sections.why_other_options_lost || []).length) {
+          whyOthersLostList.innerHTML = `<div class="signal-item"><div class="mini">No comparison evidence was returned.</div></div>`;
+        }
+
         rankList.innerHTML = "";
         prediction.ranked_options.forEach((item, index) => {
+          const componentGrid = (item.component_scores || []).map((component) => `
+            <div class="component-chip">
+              <strong>${component.name}</strong>
+              <div class="mini">weighted score: ${component.weighted_score}</div>
+              <div class="mini">${component.reason}</div>
+            </div>
+          `).join("");
           const node = document.createElement("div");
           node.className = "rank-item";
           node.innerHTML = `
             <strong>${index + 1}. ${item.option_text}</strong>
             <div class="mini">confidence: ${Math.round(item.confidence * 100)}% | raw score: ${item.raw_score}</div>
-            <div class="mini">${item.reasons.join(" ")}</div>
+            <div class="mini">${item.reason_summary}</div>
+            <div class="component-grid" style="margin-top: 10px;">${componentGrid}</div>
+            <div class="mini" style="margin-top: 10px;"><strong>Supporting evidence:</strong> ${(item.supporting_evidence || []).join(" | ") || "none"}</div>
+            <div class="mini"><strong>Counter evidence:</strong> ${(item.counter_evidence || []).join(" | ") || "none"}</div>
           `;
           rankList.appendChild(node);
         });
@@ -903,8 +1057,11 @@
           node.className = "memory-item";
           node.innerHTML = `
             <strong>${memory.chosen_option_text}</strong>
+            <div class="mini">role: ${memory.memory_role}</div>
             <div class="mini">${memory.summary}</div>
             <div class="mini">retrieval score: ${memory.retrieval_score}</div>
+            <div class="mini">why retrieved: ${(memory.why_retrieved || []).join(" | ") || "n/a"}</div>
+            <div class="mini">matched terms: ${(memory.matched_terms || []).join(", ") || "none"}</div>
           `;
           memoryList.appendChild(node);
         });
@@ -928,6 +1085,7 @@
         const userId = document.getElementById("user-id").value.trim();
         const payload = await request(`/profiles/${encodeURIComponent(userId)}/card`);
         profileCardOutput.textContent = payload.content;
+        recentStateSummaryOutput.textContent = JSON.stringify(payload.recent_summary || {}, null, 2);
       }
 
       async function loadHistory() {
@@ -952,15 +1110,17 @@
         signals.forEach((signal) => {
           const node = document.createElement("div");
           node.className = "signal-item";
+          const editorMarkup = buildSignalEditorMarkup(signal);
           node.innerHTML = `
             <strong>${signal.signal_kind}: ${signal.signal_name}</strong>
             <div class="mini">status: ${signal.status} | source: ${signal.source_type}</div>
             <div class="mini">current: ${JSON.stringify(signal.current_value ?? signal.proposed_value)}</div>
             <div class="mini">evidence: ${signal.evidence_text}</div>
             ${signal.review_note ? `<div class="mini">review note: ${signal.review_note}</div>` : ""}
+            ${editorMarkup}
             <div class="button-row" style="margin-top: 10px;">
               <button class="secondary" type="button" data-action="accept">Accept</button>
-              <button class="secondary" type="button" data-action="edit">Edit</button>
+              <button class="secondary" type="button" data-action="edit">Save edit</button>
               <button class="danger" type="button" data-action="reject">Reject</button>
             </div>
           `;
@@ -977,17 +1137,89 @@
         });
       }
 
+      function buildSignalEditorMarkup(signal) {
+        const currentValue = signal.current_value ?? signal.proposed_value ?? {};
+        if (signal.signal_kind === "mbti") {
+          return `
+            <div class="field" style="margin-top: 10px;">
+              <label>Edit MBTI</label>
+              <input data-edit-field="mbti" value="${(currentValue.mbti || "").replace(/"/g, "&quot;")}" />
+            </div>
+          `;
+        }
+        if (["decision_style", "value", "behavior_note"].includes(signal.signal_kind)) {
+          return `
+            <div class="field" style="margin-top: 10px;">
+              <label>Edit label</label>
+              <input data-edit-field="label" value="${(currentValue.label || "").replace(/"/g, "&quot;")}" />
+            </div>
+          `;
+        }
+        if (signal.signal_kind === "category_preference") {
+          return `
+            <div class="grid-2" style="margin-top: 10px;">
+              <div class="field">
+                <label>Preferred keywords</label>
+                <input data-edit-field="preferred_keywords" value="${((currentValue.preferred_keywords || []).join(", ")).replace(/"/g, "&quot;")}" />
+              </div>
+              <div class="field">
+                <label>Avoided keywords</label>
+                <input data-edit-field="avoided_keywords" value="${((currentValue.avoided_keywords || []).join(", ")).replace(/"/g, "&quot;")}" />
+              </div>
+            </div>
+          `;
+        }
+        if (signal.signal_kind === "context_preference") {
+          return `
+            <div class="field" style="margin-top: 10px;">
+              <label>Edit context values</label>
+              <input data-edit-field="values" value="${((currentValue.values || []).join(", ")).replace(/"/g, "&quot;")}" />
+            </div>
+          `;
+        }
+        return `
+          <div class="field" style="margin-top: 10px;">
+            <label>JSON fallback editor</label>
+            <textarea data-edit-json>${JSON.stringify(currentValue, null, 2)}</textarea>
+          </div>
+        `;
+      }
+
+      function collectSignalEditValue(node, signal) {
+        const currentValue = { ...(signal.current_value ?? signal.proposed_value ?? {}) };
+        if (signal.signal_kind === "mbti") {
+          return { mbti: node.querySelector("[data-edit-field='mbti']").value.trim() };
+        }
+        if (["decision_style", "value", "behavior_note"].includes(signal.signal_kind)) {
+          return { label: node.querySelector("[data-edit-field='label']").value.trim() };
+        }
+        if (signal.signal_kind === "category_preference") {
+          return {
+            category: currentValue.category,
+            preferred_keywords: node.querySelector("[data-edit-field='preferred_keywords']").value.split(",").map((item) => item.trim()).filter(Boolean),
+            avoided_keywords: node.querySelector("[data-edit-field='avoided_keywords']").value.split(",").map((item) => item.trim()).filter(Boolean)
+          };
+        }
+        if (signal.signal_kind === "context_preference") {
+          return {
+            context_key: currentValue.context_key,
+            values: node.querySelector("[data-edit-field='values']").value.split(",").map((item) => item.trim()).filter(Boolean)
+          };
+        }
+        const jsonEditor = node.querySelector("[data-edit-json]");
+        return jsonEditor ? JSON.parse(jsonEditor.value) : currentValue;
+      }
+
       async function reviewSignal(signal, action) {
         const userId = document.getElementById("user-id").value.trim();
         let editedValue = null;
         let reviewNote = "";
         if (action === "edit") {
-          const initial = JSON.stringify(signal.current_value ?? signal.proposed_value, null, 2);
-          const value = window.prompt("Edit the signal JSON", initial);
-          if (!value) {
-            return;
+          const signalNode = Array.from(signalList.children).find((child) => child.querySelector("strong")?.textContent?.includes(signal.signal_name));
+          if (!signalNode) {
+            throw new Error("Could not find the signal editor on the page.");
           }
-          editedValue = JSON.parse(value);
+          editedValue = collectSignalEditValue(signalNode, signal);
         }
         if (action !== "accept") {
           reviewNote = window.prompt("Optional review note", signal.review_note || "") || "";
@@ -1085,25 +1317,25 @@
         }
       });
 
+      document.getElementById("preview-profile-button").addEventListener("click", async () => {
+        try {
+          await previewOnboardingProfile();
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      });
+
       document.getElementById("create-profile-button").addEventListener("click", async () => {
         try {
-          const displayName = document.getElementById("onboarding-display-name").value.trim();
-          if (!displayName || !onboardingQuestionnaire) {
+          const payloadForCreate = getOnboardingPayload();
+          if (!payloadForCreate || !payloadForCreate.display_name || !onboardingQuestionnaire) {
             setStatus("Enter a display name and wait for the questionnaire to load.", true);
             return;
           }
-          const responses = onboardingQuestionnaire.questions.map((question) => ({
-            question_id: question.question_id,
-            option_id: document.getElementById(`question-${question.question_id}`).value
-          }));
           setStatus("Creating profile from structured onboarding answers...");
           const payload = await request("/profiles/onboard", {
             method: "POST",
-            body: JSON.stringify({
-              display_name: displayName,
-              mbti: document.getElementById("onboarding-mbti").value,
-              responses
-            })
+            body: JSON.stringify(payloadForCreate)
           });
           hydrateActiveUser(payload.user_id);
           setStatus(`Created profile '${payload.user_id}'. You can now test predictions for this user.`);

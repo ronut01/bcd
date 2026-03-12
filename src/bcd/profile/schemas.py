@@ -71,6 +71,13 @@ class UserOnboardingInput(BaseModel):
     responses: list[StructuredOnboardingResponseInput]
 
 
+class OnboardingPreviewRead(BaseModel):
+    display_name: str
+    profile_summary: str
+    personality_signals: dict = Field(default_factory=dict)
+    long_term_preferences: dict = Field(default_factory=dict)
+
+
 class ChatGPTImportResponse(BaseModel):
     user_profile: UserProfileRead
     import_source: Literal["chatgpt_export"] = "chatgpt_export"

@@ -25,6 +25,19 @@ def test_api_happy_path(configured_env):
     questionnaire_payload = questionnaire_response.json()
     assert questionnaire_payload["version"] == "v1"
     assert len(questionnaire_payload["questions"]) >= 5
+    preview_response = client.post(
+        "/profiles/onboard/preview",
+        json={
+            "display_name": "Taylor",
+            "mbti": "INTJ",
+            "responses": [
+                {"question_id": "meal_when_tired", "option_id": "warm_comfort"},
+                {"question_id": "planning_style", "option_id": "checklist"},
+            ],
+        },
+    )
+    assert preview_response.status_code == 200
+    assert "profile_summary" in preview_response.json()
 
     bootstrap_response = client.post("/profiles/bootstrap-sample")
     assert bootstrap_response.status_code == 200
@@ -60,6 +73,9 @@ def test_api_happy_path(configured_env):
     )
     assert prediction_response.status_code == 200
     prediction_payload = prediction_response.json()
+    assert prediction_payload["explanation_sections"]["top_choice_summary"]
+    assert prediction_payload["ranked_options"][0]["component_scores"]
+    assert "why_retrieved" in prediction_payload["retrieved_memories"][0]
 
     feedback_response = client.post(
         f"/decisions/{prediction_payload['request_id']}/feedback",

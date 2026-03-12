@@ -127,6 +127,7 @@ class ReflectionService:
                         "predicted_option_id": prediction.predicted_option_id,
                         "ranked_option_ids": prediction.ranked_option_ids_json,
                         "confidence_by_option": prediction.confidence_by_option_json,
+                        "score_breakdown": prediction.score_breakdown_json,
                         "explanation": prediction.explanation,
                         "strategy": prediction.strategy,
                     }

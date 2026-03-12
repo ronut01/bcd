@@ -68,6 +68,8 @@ def feedback(
     actual_option_id: str,
     reason_text: str = typer.Option("", help="Optional free-text reason."),
     reason_tags: str = typer.Option("", help="Comma-separated reason tags."),
+    failure_reasons: str = typer.Option("", help="Comma-separated prediction miss reasons."),
+    preference_shift_note: str = typer.Option("", help="Optional short-term shift note."),
 ) -> None:
     """Record the actual user choice and update memory."""
 
@@ -80,6 +82,8 @@ def feedback(
                 actual_option_id=actual_option_id,
                 reason_text=reason_text or None,
                 reason_tags=[tag.strip() for tag in reason_tags.split(",") if tag.strip()],
+                failure_reasons=[item.strip() for item in failure_reasons.split(",") if item.strip()],
+                preference_shift_note=preference_shift_note or None,
             ),
         )
         _pretty_dump(result)
@@ -126,6 +130,7 @@ def run_demo_flow() -> dict:
     with session_scope(settings.database_url) as session:
         profile_service = ProfileService(session, settings)
         profile = profile_service.bootstrap_sample_profile()
+        profile_card = profile_service.get_profile_card(profile.user_id)
         prediction = DecisionService(session, settings).predict(
             DecisionPredictionInput(
                 user_id=profile.user_id,
@@ -150,12 +155,15 @@ def run_demo_flow() -> dict:
                 actual_option_id=prediction.predicted_option_id,
                 reason_text="The warm and familiar option felt easiest after a long day.",
                 reason_tags=["warm", "familiar", "low_energy"],
+                failure_reasons=["recent_state_not_captured"],
+                preference_shift_note="Tonight the user wants the lowest-friction dinner possible.",
             ),
         )
         history = ReflectionService(session).list_user_history(profile.user_id, limit=3)
 
     return {
         "profile": profile.model_dump(mode="json"),
+        "profile_card": profile_card,
         "prediction": prediction.model_dump(mode="json"),
         "feedback": feedback.model_dump(mode="json"),
         "recent_history": [item.model_dump(mode="json") for item in history],

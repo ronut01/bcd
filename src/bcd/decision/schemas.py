@@ -10,6 +10,22 @@ from pydantic import BaseModel, Field, field_validator
 from bcd.memory.schemas import RetrievedMemory
 
 
+class RankedOptionComponentScore(BaseModel):
+    name: str
+    raw_score: float
+    weight: float
+    weighted_score: float
+    reason: str
+
+
+class ExplanationSections(BaseModel):
+    top_choice_summary: str
+    why_this_option: list[str] = Field(default_factory=list)
+    what_memories_mattered: list[str] = Field(default_factory=list)
+    what_recent_state_mattered: list[str] = Field(default_factory=list)
+    why_other_options_lost: list[str] = Field(default_factory=list)
+
+
 class LLMRuntimeConfig(BaseModel):
     api_key: str
     base_url: str = "https://api.openai.com/v1"
@@ -45,6 +61,10 @@ class RankedOption(BaseModel):
     raw_score: float
     confidence: float
     reasons: list[str] = Field(default_factory=list)
+    component_scores: list[RankedOptionComponentScore] = Field(default_factory=list)
+    supporting_evidence: list[str] = Field(default_factory=list)
+    counter_evidence: list[str] = Field(default_factory=list)
+    reason_summary: str = ""
 
 
 class PredictionResponse(BaseModel):
@@ -61,6 +81,7 @@ class PredictionResponse(BaseModel):
     profile_card_path: str | None = None
     ranked_options: list[RankedOption]
     retrieved_memories: list[RetrievedMemory] = Field(default_factory=list)
+    explanation_sections: ExplanationSections
     created_at: datetime
 
 
