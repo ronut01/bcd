@@ -718,6 +718,17 @@
     $("llm-chip").textContent = `llm used: ${prediction.llm_used ? `yes (${prediction.llm_provider || "configured"})` : "no"}`;
     $("metric-mode").textContent = prediction.strategy;
     $("metric-confidence").textContent = `${Math.round(prediction.confidence * 100)}%`;
+    const requestedMode = $("prediction-mode").value;
+    const llmWarning = $("llm-warning");
+    if (requestedMode !== "baseline" && !prediction.llm_used) {
+      llmWarning.textContent = prediction.llm_error
+        ? `LLM fallback: ${prediction.llm_error}`
+        : "LLM was requested, but the prediction fell back to the baseline ranker.";
+      llmWarning.classList.remove("hidden");
+    } else {
+      llmWarning.textContent = "";
+      llmWarning.classList.add("hidden");
+    }
 
     renderEvidenceList("top-choice-evidence", prediction.explanation_sections.why_this_option, "No strong top-choice evidence was returned.");
     renderEvidenceList("recent-state-evidence", prediction.explanation_sections.what_recent_state_mattered, "No recent-state evidence was returned.");

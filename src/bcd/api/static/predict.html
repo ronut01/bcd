@@ -52,7 +52,7 @@
         </aside>
       </section>
 
-      <div id="predict-status" class="status">Load or create a user from the setup page, then run a prediction here.</div>
+      <div id="predict-status" class="status top-gap">Load or create a user from the setup page, then run a prediction here.</div>
 
       <section id="predict-empty-state" class="panel empty-state top-gap">
         <strong>No active user selected.</strong>
@@ -100,7 +100,7 @@
             </div>
 
             <details class="soft-block">
-              <summary class="summary-trigger">Context and model settings</summary>
+              <summary class="summary-trigger">Context</summary>
               <div class="stack top-gap-sm">
                 <div class="grid-2">
                   <div class="field">
@@ -150,7 +150,12 @@
                   </div>
                 </div>
 
-                <div class="grid-2">
+              </div>
+            </details>
+
+            <details class="soft-block">
+              <summary class="summary-trigger">Model settings</summary>
+              <div class="stack top-gap-sm">
                 <div class="field">
                   <label for="prediction-mode">Prediction mode</label>
                   <select id="prediction-mode">
@@ -159,32 +164,24 @@
                     <option value="llm">llm</option>
                   </select>
                 </div>
+                <div class="field">
+                  <label for="llm-api-key">LLM API key</label>
+                  <input id="llm-api-key" type="password" placeholder="sk-..." />
                 </div>
-
-                <details class="soft-block">
-                  <summary class="summary-trigger">Optional LLM settings</summary>
-                  <div class="stack top-gap-sm">
-                    <p class="help">Only required if you want `hybrid` or `llm` mode to call an OpenAI-compatible API.</p>
-                    <div class="field">
-                      <label for="llm-api-key">LLM API key</label>
-                      <input id="llm-api-key" type="password" placeholder="sk-..." />
-                    </div>
-                    <div class="grid-2">
-                      <div class="field">
-                        <label for="llm-base-url">Base URL</label>
-                        <input id="llm-base-url" value="https://api.openai.com/v1" />
-                      </div>
-                      <div class="field">
-                        <label for="llm-model">Model</label>
-                        <input id="llm-model" value="gpt-4.1-mini" />
-                      </div>
-                    </div>
-                    <div class="button-row inline">
-                      <button class="secondary" id="save-llm-settings-button" type="button">Save LLM settings</button>
-                      <button class="secondary" id="clear-llm-settings-button" type="button">Clear LLM settings</button>
-                    </div>
+                <div class="grid-2">
+                  <div class="field">
+                    <label for="llm-base-url">Base URL</label>
+                    <input id="llm-base-url" value="https://api.openai.com/v1" />
                   </div>
-                </details>
+                  <div class="field">
+                    <label for="llm-model">Model</label>
+                    <input id="llm-model" value="gpt-4.1-mini" />
+                  </div>
+                </div>
+                <div class="button-row inline">
+                  <button class="secondary" id="save-llm-settings-button" type="button">Save LLM settings</button>
+                  <button class="secondary" id="clear-llm-settings-button" type="button">Clear LLM settings</button>
+                </div>
               </div>
             </details>
 
@@ -219,6 +216,8 @@
                 <span class="chip" id="llm-chip">llm used: no</span>
               </div>
             </div>
+
+            <div id="llm-warning" class="status error hidden"></div>
 
             <div class="list-card">
               <h3>Top choice summary</h3>
