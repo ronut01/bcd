@@ -14,6 +14,13 @@
   const page = document.body.dataset.page;
   let onboardingQuestionnaire = null;
   let latestPrediction = null;
+  const setupState = {
+    step: getActiveUserId() ? 3 : 1,
+    source: null,
+    onboardingAnswers: {},
+    onboardingIndex: 0,
+    preview: null,
+  };
 
   function $(id) {
     return document.getElementById(id);
@@ -24,6 +31,9 @@
     if (!node) return;
     node.textContent = message;
     node.classList.toggle("error", error);
+    if (error) {
+      showErrorModal(message);
+    }
   }
 
   function getActiveUserId() {
@@ -67,6 +77,49 @@
       if ($("llm-model")) $("llm-model").value = config.model || "gpt-4.1-mini";
     } catch (_) {
       window.localStorage.removeItem(LLM_STORAGE_KEY);
+    }
+  }
+
+  function ensureErrorModal() {
+    if (document.getElementById("global-error-modal")) return;
+    const wrapper = document.createElement("div");
+    wrapper.id = "global-error-modal";
+    wrapper.className = "modal-overlay hidden";
+    wrapper.innerHTML = `
+      <div class="modal-backdrop" id="global-error-backdrop"></div>
+      <div class="modal-sheet modal-sheet-sm">
+        <div class="modal-header">
+          <div>
+            <span class="section-tag">Attention</span>
+            <h2>Something needs your input</h2>
+          </div>
+          <div class="button-row inline">
+            <button class="secondary" id="global-error-close" type="button">Close</button>
+          </div>
+        </div>
+        <div class="list-card top-gap">
+          <p class="help" id="global-error-message"></p>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrapper);
+    document.getElementById("global-error-backdrop").addEventListener("click", closeErrorModal);
+    document.getElementById("global-error-close").addEventListener("click", closeErrorModal);
+  }
+
+  function showErrorModal(message) {
+    ensureErrorModal();
+    $("global-error-message").textContent = message;
+    $("global-error-modal").classList.remove("hidden");
+    document.body.classList.add("modal-open");
+  }
+
+  function closeErrorModal() {
+    const modal = $("global-error-modal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    if ($("prediction-modal")?.classList.contains("hidden")) {
+      document.body.classList.remove("modal-open");
     }
   }
 
@@ -300,7 +353,8 @@
         review_note: reviewNote || null,
       }),
     });
-    await hydrateSetupWorkspace();
+    await hydrateReviewSummary();
+    await hydrateOptionalAdjustments();
     setStatus(`Signal '${signal.signal_name}' updated.`);
   }
 
@@ -393,7 +447,8 @@
           await request(`/profiles/${encodeURIComponent(note.user_id)}/recent-state/${encodeURIComponent(note.note_id)}`, {
             method: "DELETE",
           });
-          await hydrateSetupWorkspace();
+          await hydrateReviewSummary();
+          await hydrateOptionalAdjustments();
           setStatus("Recent-state note removed.");
         } catch (error) {
           setStatus(error.message, true);
@@ -403,47 +458,40 @@
     });
   }
 
-  async function hydrateSetupWorkspace() {
+  async function hydrateReviewSummary() {
     if (page !== "setup") return;
     const userId = getActiveUserId();
-    const emptyState = $("setup-empty-state");
-    const workspace = $("setup-user-workspace");
+    const emptyState = $("setup-review-empty");
+    const workspace = $("setup-review-content");
     if (!userId) {
       $("setup-metric-user").textContent = "None";
       $("setup-metric-signals").textContent = "0";
       $("setup-metric-notes").textContent = "0";
       emptyState.classList.remove("hidden");
       workspace.classList.add("hidden");
+      renderExistingUserBanner();
       return;
     }
     emptyState.classList.add("hidden");
     workspace.classList.remove("hidden");
 
-    const [profile, card, signals, recentState, history] = await Promise.all([
+    const [profile, card, recentState] = await Promise.all([
       fetchProfileBundle(userId),
       fetchProfileCard(userId),
-      fetchSignals(userId),
       fetchRecentState(userId),
-      fetchHistory(userId),
     ]);
 
     $("setup-metric-user").textContent = userId;
-    $("setup-metric-signals").textContent = String(profile.signal_count || signals.length);
+    $("setup-metric-signals").textContent = String(profile.signal_count || 0);
     $("setup-metric-notes").textContent = String(recentState.length);
     $("setup-user-name").textContent = profile.display_name;
     $("setup-user-id").textContent = profile.user_id;
     $("setup-user-summary").textContent = profile.profile_summary;
-    renderChipRow("setup-profile-meta", [
-      `${profile.memory_count} memories`,
+    renderChipRow("signal-summary", [
+      `${profile.pending_signal_count} pending`,
+      `${Math.max((profile.signal_count || 0) - (profile.pending_signal_count || 0), 0)} reviewed`,
       `${profile.history_count} decisions`,
-      `${profile.pending_signal_count} pending signals`,
-    ]);
-    $("setup-snapshot-summary").textContent = profile.latest_snapshot
-      ? `${profile.latest_snapshot.summary}\n\nDrift markers: ${(profile.latest_snapshot.drift_markers || []).join(" | ") || "none"}`
-      : "No snapshot yet.";
-    $("profile-card-output").textContent = card.content;
-    $("recent-state-summary-output").textContent = JSON.stringify(card.recent_summary || {}, null, 2);
-    $("history-output").textContent = JSON.stringify(history, null, 2);
+    ], "No signals");
     renderSimpleList("stable-highlights", extractStableHighlights(profile), "No stable highlights yet.");
     renderSimpleList(
       "recent-summary-list",
@@ -454,17 +502,56 @@
       ].slice(0, 6),
       "No recent-state highlights yet.",
     );
+    renderExistingUserBanner(profile);
+  }
+
+  async function hydrateOptionalAdjustments() {
+    if (page !== "setup") return;
+    const userId = getActiveUserId();
+    const emptyState = $("setup-adjustments-empty");
+    const workspace = $("setup-adjustments-content");
+    if (!userId) {
+      emptyState.classList.remove("hidden");
+      workspace.classList.add("hidden");
+      return;
+    }
+
+    emptyState.classList.add("hidden");
+    workspace.classList.remove("hidden");
+
+    const [signals, recentState, history, card] = await Promise.all([
+      fetchSignals(userId),
+      fetchRecentState(userId),
+      fetchHistory(userId),
+      fetchProfileCard(userId),
+    ]);
+    $("setup-metric-notes").textContent = String(recentState.length);
+    $("profile-card-output").textContent = card.content;
+    $("recent-state-summary-output").textContent = JSON.stringify(card.recent_summary || {}, null, 2);
+    $("history-output").textContent = JSON.stringify(history, null, 2);
     renderHistorySummary(history);
     renderSignals(signals);
     renderRecentStateNotes(recentState);
+  }
+
+  function renderExistingUserBanner(profile = null) {
+    const banner = $("setup-existing-user-banner");
+    const title = $("existing-user-title");
+    if (!banner || !title) return;
+    const userId = getActiveUserId();
+    if (!userId) {
+      banner.classList.add("hidden");
+      return;
+    }
+    banner.classList.remove("hidden");
+    title.textContent = profile ? `${profile.display_name} (${profile.user_id})` : userId;
   }
 
   async function loadOnboardingQuestionnaire() {
     const payload = await request("/profiles/onboarding-questionnaire");
     onboardingQuestionnaire = payload;
     const mbtiSelect = $("onboarding-mbti");
-    const container = $("onboarding-questionnaire");
-    if (!mbtiSelect || !container) return;
+    if (!mbtiSelect) return;
 
     mbtiSelect.innerHTML = "";
     payload.mbti_options.forEach((mbti) => {
@@ -473,33 +560,6 @@
       option.textContent = mbti;
       mbtiSelect.appendChild(option);
     });
-
-    container.innerHTML = "";
-    payload.questions.forEach((question) => {
-      const wrapper = document.createElement("div");
-      wrapper.className = "field";
-      const selectId = `question-${question.question_id}`;
-      wrapper.innerHTML = `
-        <label for="${selectId}">${escapeHtml(question.prompt)}</label>
-        <select id="${selectId}"></select>
-        <div class="mini" id="${selectId}-description"></div>
-      `;
-      const select = wrapper.querySelector("select");
-      question.options.forEach((option) => {
-        const node = document.createElement("option");
-        node.value = option.option_id;
-        node.textContent = option.label;
-        select.appendChild(node);
-      });
-      const descriptionNode = wrapper.querySelector(`#${selectId}-description`);
-      const updateDescription = () => {
-        const current = question.options.find((item) => item.option_id === select.value);
-        descriptionNode.textContent = current ? current.description : "";
-      };
-      select.addEventListener("change", updateDescription);
-      updateDescription();
-      container.appendChild(wrapper);
-    });
   }
 
   function getOnboardingPayload() {
@@ -507,26 +567,24 @@
     return {
       display_name: $("onboarding-display-name").value.trim(),
       mbti: $("onboarding-mbti").value,
-      responses: onboardingQuestionnaire.questions.map((question) => ({
-        question_id: question.question_id,
-        option_id: $(`question-${question.question_id}`).value,
-      })),
+      responses: onboardingQuestionnaire.questions
+        .map((question) => ({
+          question_id: question.question_id,
+          option_id: setupState.onboardingAnswers[question.question_id],
+        }))
+        .filter((item) => item.option_id),
     };
   }
 
-  async function previewOnboardingProfile() {
-    const payload = getOnboardingPayload();
+  async function previewOnboardingProfile(payload = getOnboardingPayload()) {
     if (!payload || !payload.display_name) {
       setStatus("Enter a display name before previewing the profile.", true);
-      return;
+      return null;
     }
-    setStatus("Previewing structured profile...");
-    const preview = await request("/profiles/onboard/preview", {
+    return request("/profiles/onboard/preview", {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    $("onboarding-preview-output").textContent = JSON.stringify(preview, null, 2);
-    setStatus("Structured profile preview updated.");
   }
 
   function escapeHtml(value) {
@@ -597,7 +655,7 @@
     $("mood").value = "";
     $("budget").value = "";
     $("urgency").value = "";
-    $("prediction-mode").value = "baseline";
+    $("prediction-mode").value = "hybrid";
     $("reason-text").value = "";
     $("reason-tags").value = "";
     $("preference-shift-note").value = "";
@@ -608,9 +666,11 @@
     $("option-list").innerHTML = "";
     DEFAULT_OPTIONS.forEach(createOptionRow);
     $("feedback-panel").classList.add("hidden");
+    closePredictionModal();
     $("prediction-empty").classList.remove("hidden");
     $("prediction-content").classList.add("hidden");
     latestPrediction = null;
+    $("metric-mode").textContent = "hybrid";
   }
 
   function getContextPayload() {
@@ -651,6 +711,7 @@
     $("prediction-empty").classList.add("hidden");
     $("prediction-content").classList.remove("hidden");
     $("feedback-panel").classList.remove("hidden");
+    openPredictionModal();
     $("predicted-option-text").textContent = prediction.predicted_option_text;
     $("prediction-explanation").textContent = prediction.explanation_sections.top_choice_summary;
     $("strategy-chip").textContent = `strategy: ${prediction.strategy}`;
@@ -730,6 +791,22 @@
     });
   }
 
+  function openPredictionModal() {
+    const modal = $("prediction-modal");
+    if (!modal) return;
+    modal.classList.remove("hidden");
+    document.body.classList.add("modal-open");
+  }
+
+  function closePredictionModal() {
+    const modal = $("prediction-modal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    if ($("global-error-modal")?.classList.contains("hidden")) {
+      document.body.classList.remove("modal-open");
+    }
+  }
+
   function renderEvidenceList(containerId, items, emptyMessage) {
     const container = $(containerId);
     if (!container) return;
@@ -777,45 +854,161 @@
     }
   }
 
+  function setSetupStep(step) {
+    setupState.step = step;
+    document.querySelectorAll(".wizard-panel").forEach((panel) => {
+      const isActive = panel.id === `setup-step-${step}`;
+      panel.classList.toggle("hidden", !isActive);
+    });
+    document.querySelectorAll("#setup-stepper .wizard-step").forEach((item) => {
+      const itemStep = Number(item.dataset.step);
+      item.classList.toggle("active", itemStep === step);
+      item.classList.toggle("complete", itemStep < step);
+    });
+  }
+
+  function renderStructuredQuestionCard() {
+    if (!onboardingQuestionnaire) return;
+    const question = onboardingQuestionnaire.questions[setupState.onboardingIndex];
+    if (!question) return;
+
+    const total = onboardingQuestionnaire.questions.length;
+    $("onboarding-progress-text").textContent = `Question ${setupState.onboardingIndex + 1} / ${total}`;
+    $("onboarding-progress-fill").style.width = `${((setupState.onboardingIndex + 1) / total) * 100}%`;
+    $("onboarding-question-label").textContent = question.title || `Question ${setupState.onboardingIndex + 1}`;
+    $("onboarding-question-title").textContent = question.prompt;
+    $("onboarding-question-prompt").textContent = "Pick the option that feels most natural for this user.";
+
+    const selectedOptionId = setupState.onboardingAnswers[question.question_id] || "";
+    const optionList = $("onboarding-option-list");
+    optionList.innerHTML = "";
+    question.options.forEach((option) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `wizard-option-card${selectedOptionId === option.option_id ? " selected" : ""}`;
+      button.innerHTML = `
+        <span class="section-tag">${escapeHtml(option.label)}</span>
+        <strong>${escapeHtml(option.description)}</strong>
+      `;
+      button.addEventListener("click", () => {
+        setupState.onboardingAnswers[question.question_id] = option.option_id;
+        renderStructuredQuestionCard();
+      });
+      optionList.appendChild(button);
+    });
+
+    $("structured-back-button").textContent = setupState.onboardingIndex === 0 ? "Back" : "Previous question";
+    $("structured-next-button").textContent = setupState.onboardingIndex === total - 1 ? "Create profile" : "Next question";
+  }
+
+  function renderCreateUserStep() {
+    $("structured-create-flow").classList.toggle("hidden", setupState.source !== "structured");
+    $("import-create-flow").classList.toggle("hidden", setupState.source !== "import");
+    if (setupState.source === "structured") {
+      $("create-user-title").textContent = "Create user";
+      $("create-user-help").textContent = "Answer one question at a time. The profile will be created after the last answer.";
+      renderStructuredQuestionCard();
+    } else if (setupState.source === "import") {
+      $("create-user-title").textContent = "Import user";
+      $("create-user-help").textContent = "Upload a ChatGPT export and let the system infer a starter profile.";
+    }
+  }
+
+  async function handleStructuredNext() {
+    if (!onboardingQuestionnaire) {
+      setStatus("The questionnaire is still loading.", true);
+      return;
+    }
+    if (!$("onboarding-display-name").value.trim()) {
+      setStatus("Enter a display name before continuing.", true);
+      return;
+    }
+    if (!$("onboarding-mbti").value.trim()) {
+      setStatus("Choose an MBTI value before continuing.", true);
+      return;
+    }
+
+    const question = onboardingQuestionnaire.questions[setupState.onboardingIndex];
+    if (!setupState.onboardingAnswers[question.question_id]) {
+      setStatus("Choose one answer before moving on.", true);
+      return;
+    }
+
+    const isLastQuestion = setupState.onboardingIndex === onboardingQuestionnaire.questions.length - 1;
+    if (!isLastQuestion) {
+      setupState.onboardingIndex += 1;
+      renderStructuredQuestionCard();
+      return;
+    }
+
+    const payload = getOnboardingPayload();
+    if (!payload || payload.responses.length !== onboardingQuestionnaire.questions.length) {
+      setStatus("Complete every onboarding question before creating the profile.", true);
+      return;
+    }
+
+    try {
+      setStatus("Creating profile from structured onboarding answers...");
+      setupState.preview = await previewOnboardingProfile(payload);
+      const created = await request("/profiles/onboard", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setActiveUserId(created.user_id);
+      await hydrateReviewSummary();
+      setSetupStep(3);
+      setStatus(`Created profile '${created.user_id}'. Review the summary or continue to prediction.`);
+    } catch (error) {
+      setStatus(error.message, true);
+    }
+  }
+
   function wireSetupPage() {
-    $("bootstrap-button").addEventListener("click", async () => {
+    $("choose-source-sample").addEventListener("click", async () => {
       try {
         setStatus("Loading sample profile...");
         const payload = await request("/profiles/bootstrap-sample", { method: "POST" });
         setActiveUserId(payload.user_id);
-        await hydrateSetupWorkspace();
-        setStatus(`Sample profile '${payload.user_id}' is ready. Move to the prediction workspace when you want to test choices.`);
+        await hydrateReviewSummary();
+        setSetupStep(3);
+        setStatus(`Sample profile '${payload.user_id}' is ready. Review the summary or continue to prediction.`);
       } catch (error) {
         setStatus(error.message, true);
       }
     });
 
-    $("preview-profile-button").addEventListener("click", async () => {
-      try {
-        await previewOnboardingProfile();
-      } catch (error) {
-        setStatus(error.message, true);
-      }
+    $("choose-source-structured").addEventListener("click", () => {
+      setupState.source = "structured";
+      setupState.onboardingIndex = 0;
+      setupState.onboardingAnswers = {};
+      renderCreateUserStep();
+      setSetupStep(2);
     });
 
-    $("create-profile-button").addEventListener("click", async () => {
-      try {
-        const payloadForCreate = getOnboardingPayload();
-        if (!payloadForCreate || !payloadForCreate.display_name || !onboardingQuestionnaire) {
-          setStatus("Enter a display name and wait for the questionnaire to load.", true);
-          return;
-        }
-        setStatus("Creating profile from structured onboarding answers...");
-        const payload = await request("/profiles/onboard", {
-          method: "POST",
-          body: JSON.stringify(payloadForCreate),
-        });
-        setActiveUserId(payload.user_id);
-        await hydrateSetupWorkspace();
-        setStatus(`Created profile '${payload.user_id}'. Review the signals here, then open the prediction workspace.`);
-      } catch (error) {
-        setStatus(error.message, true);
+    $("choose-source-import").addEventListener("click", () => {
+      setupState.source = "import";
+      renderCreateUserStep();
+      setSetupStep(2);
+    });
+
+    $("resume-existing-user-button").addEventListener("click", async () => {
+      await hydrateReviewSummary();
+      setSetupStep(3);
+    });
+
+    $("structured-back-button").addEventListener("click", () => {
+      if (setupState.onboardingIndex === 0) {
+        setSetupStep(1);
+        return;
       }
+      setupState.onboardingIndex -= 1;
+      renderStructuredQuestionCard();
+    });
+
+    $("structured-next-button").addEventListener("click", handleStructuredNext);
+
+    $("import-back-button").addEventListener("click", () => {
+      setSetupStep(1);
     });
 
     $("import-profile-button").addEventListener("click", async () => {
@@ -835,21 +1028,31 @@
           body: formData,
         });
         setActiveUserId(payload.user_profile.user_id);
-        await hydrateSetupWorkspace();
+        await hydrateReviewSummary();
+        setSetupStep(3);
         setStatus(`Imported profile '${payload.user_profile.user_id}' from ${payload.import_stats.conversation_count} conversations.`);
       } catch (error) {
         setStatus(error.message, true);
       }
     });
 
-    $("refresh-user-button").addEventListener("click", async () => {
-      try {
-        setStatus("Refreshing user workspace...");
-        await hydrateSetupWorkspace();
-        setStatus("User workspace refreshed.");
-      } catch (error) {
-        setStatus(error.message, true);
-      }
+    $("open-optional-adjustments-button").addEventListener("click", async () => {
+      await hydrateOptionalAdjustments();
+      setSetupStep(4);
+    });
+
+    $("back-to-summary-button").addEventListener("click", async () => {
+      await hydrateReviewSummary();
+      setSetupStep(3);
+    });
+
+    $("restart-setup-button").addEventListener("click", () => {
+      setupState.source = null;
+      setupState.onboardingAnswers = {};
+      setupState.onboardingIndex = 0;
+      setupState.preview = null;
+      setSetupStep(1);
+      setStatus("Choose a new source to create or load a user.");
     });
 
     $("add-recent-state-note-button").addEventListener("click", async () => {
@@ -866,12 +1069,16 @@
           body: JSON.stringify({ note_text: noteText, tags: [] }),
         });
         $("recent-state-note").value = "";
-        await hydrateSetupWorkspace();
+        await hydrateReviewSummary();
+        await hydrateOptionalAdjustments();
         setStatus("Recent-state note saved.");
       } catch (error) {
         setStatus(error.message, true);
       }
     });
+
+    renderExistingUserBanner();
+    setSetupStep(setupState.step);
   }
 
   function wirePredictPage() {
@@ -881,6 +1088,9 @@
     resetPredictionForm();
     $("add-option-button").addEventListener("click", () => createOptionRow(""));
     $("reset-button").addEventListener("click", resetPredictionForm);
+    $("close-prediction-button").addEventListener("click", closePredictionModal);
+    $("edit-prediction-button").addEventListener("click", closePredictionModal);
+    $("prediction-modal-backdrop").addEventListener("click", closePredictionModal);
 
     $("predict-button").addEventListener("click", async () => {
       try {
@@ -941,10 +1151,13 @@
 
   async function init() {
     try {
+      ensureErrorModal();
       if (page === "setup") {
         await loadOnboardingQuestionnaire();
         wireSetupPage();
-        await hydrateSetupWorkspace();
+        if (getActiveUserId()) {
+          await hydrateReviewSummary();
+        }
       }
       if (page === "predict") {
         wirePredictPage();

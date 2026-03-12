@@ -97,6 +97,7 @@ button,
 .hero,
 .layout,
 .split-cards,
+.source-card-grid,
 .metric-strip,
 .grid-2,
 .grid-3,
@@ -129,6 +130,10 @@ button,
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.source-card-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .panel {
   background: rgba(255, 253, 249, 0.92);
   border: 1px solid var(--line);
@@ -140,6 +145,127 @@ button,
 .hero-copy,
 .hero-side {
   min-height: 100%;
+}
+
+.wizard-shell {
+  display: grid;
+  gap: 20px;
+}
+
+.wizard-stepper {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.wizard-step {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+  color: var(--muted);
+}
+
+.wizard-step.active {
+  border-color: rgba(23, 98, 77, 0.35);
+  background: rgba(23, 98, 77, 0.08);
+  color: var(--ink);
+}
+
+.wizard-step.complete {
+  border-color: rgba(23, 98, 77, 0.22);
+}
+
+.wizard-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--line);
+  font-weight: 700;
+}
+
+.wizard-step.active .wizard-step-number,
+.wizard-step.complete .wizard-step-number {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.wizard-panel {
+  min-height: 420px;
+}
+
+.predict-input-shell {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.wizard-card {
+  padding: 18px;
+  border-radius: 18px;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+}
+
+.wizard-progress {
+  display: grid;
+  gap: 8px;
+}
+
+.wizard-progress-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(23, 98, 77, 0.12);
+  overflow: hidden;
+}
+
+.wizard-progress-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), #2d8c6f);
+  transition: width 180ms ease;
+}
+
+.question-card {
+  padding: 18px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.wizard-option-list {
+  display: grid;
+  gap: 12px;
+}
+
+.source-card,
+.wizard-option-card {
+  width: 100%;
+  text-align: left;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 249, 0.96);
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+
+.source-card strong,
+.wizard-option-card strong {
+  display: block;
+  margin: 8px 0 6px;
+}
+
+.wizard-option-card.selected {
+  border-color: rgba(23, 98, 77, 0.4);
+  background: rgba(23, 98, 77, 0.08);
 }
 
 .eyebrow,
@@ -259,6 +385,17 @@ input[type="file"] {
   background: var(--surface-strong);
 }
 
+input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  accent-color: var(--accent);
+  justify-self: start;
+  align-self: start;
+}
+
 button {
   border: none;
   padding: 12px 18px;
@@ -335,9 +472,10 @@ button:hover,
 }
 
 .checkbox-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+  display: grid;
+  grid-template-columns: min-content 1fr;
+  gap: 12px;
+  align-items: start;
   color: var(--muted);
 }
 
@@ -356,6 +494,58 @@ details[open] > .summary-trigger {
 
 .compact-details {
   padding: 16px;
+}
+
+.compact-details > summary {
+  list-style: none;
+}
+
+.compact-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(19, 28, 31, 0.44);
+  backdrop-filter: blur(6px);
+}
+
+.modal-sheet {
+  position: relative;
+  z-index: 1;
+  width: min(980px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 24px;
+  border-radius: 24px;
+  background: rgba(255, 253, 249, 0.98);
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 70px rgba(18, 24, 27, 0.22);
+}
+
+.modal-sheet-sm {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+body.modal-open {
+  overflow: hidden;
 }
 
 .hidden {
@@ -381,7 +571,9 @@ pre {
   .hero,
   .layout.two-col,
   .layout.single-focus,
+  .source-card-grid,
   .split-cards,
+  .wizard-stepper,
   .metric-strip,
   .grid-2,
   .grid-3,

@@ -55,6 +55,20 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     static_dir = Path(__file__).with_name("static")
+    no_cache_headers = {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
+
+    def render_html_page(filename: str) -> HTMLResponse:
+        html_path = static_dir / filename
+        styles_version = int((static_dir / "styles.css").stat().st_mtime)
+        script_version = int((static_dir / "app.js").stat().st_mtime)
+        content = html_path.read_text(encoding="utf-8")
+        content = content.replace("/app/assets/styles.css", f"/app/assets/styles.css?v={styles_version}")
+        content = content.replace("/app/assets/app.js", f"/app/assets/app.js?v={script_version}")
+        return HTMLResponse(content, headers=no_cache_headers)
 
     @app.get("/", include_in_schema=False)
     def root_redirect():
@@ -66,11 +80,11 @@ def create_app() -> FastAPI:
 
     @app.get("/app/predict", include_in_schema=False, response_class=HTMLResponse)
     def predict_page():
-        return HTMLResponse((static_dir / "predict.html").read_text(encoding="utf-8"))
+        return render_html_page("predict.html")
 
     @app.get("/app/setup", include_in_schema=False, response_class=HTMLResponse)
     def setup_page():
-        return HTMLResponse((static_dir / "setup.html").read_text(encoding="utf-8"))
+        return render_html_page("setup.html")
 
     @app.get("/app/assets/{asset_name}", include_in_schema=False)
     def app_asset(asset_name: str):
@@ -82,7 +96,7 @@ def create_app() -> FastAPI:
             media_type = "text/css"
         elif asset_name.endswith(".js"):
             media_type = "application/javascript"
-        return FileResponse(asset_path, media_type=media_type)
+        return FileResponse(asset_path, media_type=media_type, headers=no_cache_headers)
 
     @app.post("/profiles/bootstrap-sample", response_model=UserProfileRead)
     def bootstrap_sample_profile(session: Session = Depends(get_session)):

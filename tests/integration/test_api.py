@@ -22,6 +22,7 @@ def test_api_happy_path(configured_env):
     setup_response = client.get("/app/setup")
     assert setup_response.status_code == 200
     assert "user setup" in setup_response.text.lower()
+    assert "choose source" in setup_response.text.lower()
     predict_response = client.get("/app/predict")
     assert predict_response.status_code == 200
     assert "prediction workspace" in predict_response.text.lower()
