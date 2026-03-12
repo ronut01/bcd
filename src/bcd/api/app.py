@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlmodel import Session
 
 from bcd.config import Settings, get_settings
@@ -54,15 +54,35 @@ def create_app() -> FastAPI:
         description="Research-friendly personalized decision prediction MVP.",
         lifespan=lifespan,
     )
-    demo_path = Path(__file__).with_name("static") / "demo.html"
+    static_dir = Path(__file__).with_name("static")
 
     @app.get("/", include_in_schema=False)
     def root_redirect():
-        return RedirectResponse(url="/app")
+        return RedirectResponse(url="/app/setup")
 
-    @app.get("/app", include_in_schema=False, response_class=HTMLResponse)
-    def demo_page():
-        return HTMLResponse(demo_path.read_text(encoding="utf-8"))
+    @app.get("/app", include_in_schema=False)
+    def app_redirect():
+        return RedirectResponse(url="/app/setup")
+
+    @app.get("/app/predict", include_in_schema=False, response_class=HTMLResponse)
+    def predict_page():
+        return HTMLResponse((static_dir / "predict.html").read_text(encoding="utf-8"))
+
+    @app.get("/app/setup", include_in_schema=False, response_class=HTMLResponse)
+    def setup_page():
+        return HTMLResponse((static_dir / "setup.html").read_text(encoding="utf-8"))
+
+    @app.get("/app/assets/{asset_name}", include_in_schema=False)
+    def app_asset(asset_name: str):
+        asset_path = (static_dir / asset_name).resolve()
+        if static_dir.resolve() not in asset_path.parents or not asset_path.exists() or not asset_path.is_file():
+            raise HTTPException(status_code=404, detail="Asset not found.")
+        media_type = None
+        if asset_name.endswith(".css"):
+            media_type = "text/css"
+        elif asset_name.endswith(".js"):
+            media_type = "application/javascript"
+        return FileResponse(asset_path, media_type=media_type)
 
     @app.post("/profiles/bootstrap-sample", response_model=UserProfileRead)
     def bootstrap_sample_profile(session: Session = Depends(get_session)):

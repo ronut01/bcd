@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>bcd prediction workspace</title>
+    <link rel="stylesheet" href="/app/assets/styles.css" />
+  </head>
+  <body data-page="predict">
+    <div class="shell">
+      <nav class="nav">
+        <a class="brand" href="/app/predict">bcd</a>
+        <div class="nav-links">
+          <a class="nav-link" href="/app/setup">User setup</a>
+          <a class="nav-link active" href="/app/predict">Prediction workspace</a>
+        </div>
+      </nav>
+
+      <section class="hero">
+        <article class="panel hero-copy">
+          <span class="eyebrow">Prediction workspace</span>
+          <h1>Ask the decision here. Keep user modeling somewhere else.</h1>
+          <p>
+            This page is focused on one job: entering a decision prompt, scoring options, inspecting the result,
+            and recording feedback. Profile editing and recent-state management live on the separate setup page.
+          </p>
+        </article>
+        <aside class="panel hero-side">
+          <div class="metric-strip">
+            <div class="metric">
+              <span class="mini">Current user</span>
+              <strong id="metric-user">None</strong>
+            </div>
+            <div class="metric">
+              <span class="mini">Prediction mode</span>
+              <strong id="metric-mode">baseline</strong>
+            </div>
+            <div class="metric">
+              <span class="mini">Confidence</span>
+              <strong id="metric-confidence">-</strong>
+            </div>
+          </div>
+          <div id="predict-user-banner" class="list-card hidden">
+            <span class="mini">Active user summary</span>
+            <strong id="predict-user-name">-</strong>
+            <div class="mini" id="predict-user-id">-</div>
+            <p id="predict-user-summary" class="help">User summary will appear here.</p>
+          </div>
+          <div class="button-row inline">
+            <a class="button-link secondary" href="/app/setup">Manage user settings</a>
+          </div>
+        </aside>
+      </section>
+
+      <div id="predict-status" class="status">Load or create a user from the setup page, then run a prediction here.</div>
+
+      <section id="predict-empty-state" class="panel empty-state top-gap">
+        <strong>No active user selected.</strong>
+        <p>Open the setup page first, create or load a user, then come back here to run predictions.</p>
+        <div class="button-row inline top-gap-sm">
+          <a class="button-link primary" href="/app/setup">Go to user setup</a>
+        </div>
+      </section>
+
+      <section id="predict-workspace" class="layout single-focus hidden top-gap">
+        <div class="stack">
+          <article class="panel">
+            <span class="section-tag">Step 1</span>
+            <h2>Ask a decision</h2>
+            <p class="help">Enter the current question, the candidate options, and the immediate context that might affect the user's choice.</p>
+            <div class="stack top-gap">
+              <div class="grid-2">
+                <div class="field">
+                  <label for="user-id">Active user ID</label>
+                  <input id="user-id" readonly />
+                </div>
+                <div class="field">
+                  <label for="category">Category</label>
+                  <select id="category">
+                    <option value="food">food</option>
+                    <option value="entertainment">entertainment</option>
+                    <option value="study">study</option>
+                    <option value="shopping">shopping</option>
+                    <option value="custom">custom</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="prompt">Question or situation</label>
+                <textarea id="prompt">Pick dinner after a tiring rainy evening.</textarea>
+              </div>
+
+              <div class="field">
+                <label>Candidate options</label>
+                <div class="option-list" id="option-list"></div>
+                <div class="button-row inline">
+                  <button class="secondary" id="add-option-button" type="button">Add option</button>
+                  <button class="secondary" id="reset-button" type="button">Reset example</button>
+                </div>
+              </div>
+
+              <div class="grid-2">
+                <div class="field">
+                  <label for="time_of_day">Time of day</label>
+                  <select id="time_of_day">
+                    <option value="">(optional)</option>
+                    <option value="morning">morning</option>
+                    <option value="afternoon">afternoon</option>
+                    <option value="evening">evening</option>
+                    <option value="night" selected>night</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="energy">Energy</label>
+                  <select id="energy">
+                    <option value="">(optional)</option>
+                    <option value="low" selected>low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="grid-2">
+                <div class="field">
+                  <label for="weather">Weather</label>
+                  <input id="weather" value="rainy" />
+                </div>
+                <div class="field">
+                  <label for="with">Who is the user with?</label>
+                  <input id="with" value="alone" />
+                </div>
+              </div>
+
+              <div class="grid-3">
+                <div class="field">
+                  <label for="mood">Mood</label>
+                  <input id="mood" placeholder="optional" />
+                </div>
+                <div class="field">
+                  <label for="budget">Budget sensitivity</label>
+                  <input id="budget" placeholder="optional" />
+                </div>
+                <div class="field">
+                  <label for="urgency">Urgency</label>
+                  <input id="urgency" placeholder="optional" />
+                </div>
+              </div>
+
+              <div class="grid-2">
+                <div class="field">
+                  <label for="prediction-mode">Prediction mode</label>
+                  <select id="prediction-mode">
+                    <option value="baseline" selected>baseline</option>
+                    <option value="hybrid">hybrid</option>
+                    <option value="llm">llm</option>
+                  </select>
+                </div>
+              </div>
+
+              <details class="soft-block">
+                <summary class="summary-trigger">Optional LLM settings</summary>
+                <div class="stack top-gap-sm">
+                  <p class="help">Only required if you want `hybrid` or `llm` mode to call an OpenAI-compatible API.</p>
+                  <div class="field">
+                    <label for="llm-api-key">LLM API key</label>
+                    <input id="llm-api-key" type="password" placeholder="sk-..." />
+                  </div>
+                  <div class="grid-2">
+                    <div class="field">
+                      <label for="llm-base-url">Base URL</label>
+                      <input id="llm-base-url" value="https://api.openai.com/v1" />
+                    </div>
+                    <div class="field">
+                      <label for="llm-model">Model</label>
+                      <input id="llm-model" value="gpt-4.1-mini" />
+                    </div>
+                  </div>
+                  <div class="button-row inline">
+                    <button class="secondary" id="save-llm-settings-button" type="button">Save LLM settings</button>
+                    <button class="secondary" id="clear-llm-settings-button" type="button">Clear LLM settings</button>
+                  </div>
+                </div>
+              </details>
+
+              <div class="button-row inline">
+                <button class="primary" id="predict-button" type="button">Run prediction</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel hidden" id="feedback-panel">
+            <span class="section-tag">Step 3</span>
+            <h2>Give feedback</h2>
+            <p class="help">Record what the user actually chose so memory, recent state, and drift markers can update.</p>
+            <div class="stack top-gap">
+              <div class="field">
+                <label for="actual-option">Actual chosen option</label>
+                <select id="actual-option"></select>
+              </div>
+              <div class="field">
+                <label for="reason-text">Why was that choice made?</label>
+                <textarea id="reason-text" placeholder="Optional free-text reason"></textarea>
+              </div>
+              <div class="field">
+                <label for="reason-tags">Reason tags</label>
+                <input id="reason-tags" placeholder="warm, easy, social" />
+              </div>
+              <div class="field">
+                <label>Why might the prediction have been wrong?</label>
+                <div class="checkbox-list" id="failure-reason-list"></div>
+              </div>
+              <div class="field">
+                <label for="preference-shift-note">Preference shift note</label>
+                <textarea id="preference-shift-note" placeholder="Optional: describe any temporary or lasting shift in preference"></textarea>
+              </div>
+              <div class="field">
+                <label for="context-updates">Context updates (JSON)</label>
+                <textarea id="context-updates" placeholder='Optional JSON, for example {"energy":"lower_than_expected"}'></textarea>
+              </div>
+              <div class="button-row inline">
+                <button class="primary" id="feedback-button" type="button">Save feedback</button>
+                <a class="button-link secondary" href="/app/setup">Adjust profile or recent state</a>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="stack">
+          <article class="panel">
+            <span class="section-tag">Step 2</span>
+            <h2>Inspect the prediction</h2>
+            <div id="prediction-empty" class="note">No prediction yet. Ask a question on the left to see a ranked result and explanation.</div>
+            <div id="prediction-content" class="stack hidden">
+              <div class="prediction-hero">
+                <span class="mini">Predicted choice</span>
+                <strong id="predicted-option-text">-</strong>
+                <div class="chip-row top-gap-sm">
+                  <span class="chip" id="strategy-chip">strategy: -</span>
+                  <span class="chip" id="llm-chip">llm used: no</span>
+                </div>
+              </div>
+              <div class="list-card">
+                <h3>Top choice summary</h3>
+                <p class="help" id="prediction-explanation"></p>
+              </div>
+              <div class="list-card">
+                <h3>Ranked options</h3>
+                <div class="rank-list top-gap-sm" id="rank-list"></div>
+              </div>
+              <details class="list-card compact-details">
+                <summary class="summary-trigger">Why this prediction happened</summary>
+                <div class="split-cards top-gap-sm">
+                  <section>
+                    <h3>Why this option</h3>
+                    <div class="evidence-list top-gap-sm" id="top-choice-evidence"></div>
+                  </section>
+                  <section>
+                    <h3>Recent state that mattered</h3>
+                    <div class="evidence-list top-gap-sm" id="recent-state-evidence"></div>
+                  </section>
+                </div>
+                <div class="split-cards top-gap-sm">
+                  <section>
+                    <h3>Memories that mattered</h3>
+                    <div class="evidence-list top-gap-sm" id="memory-explanation-list"></div>
+                  </section>
+                  <section>
+                    <h3>Why other options lost</h3>
+                    <div class="evidence-list top-gap-sm" id="why-others-lost-list"></div>
+                  </section>
+                </div>
+              </details>
+              <details class="list-card compact-details">
+                <summary class="summary-trigger">Retrieved memories</summary>
+                <div class="memory-list top-gap-sm" id="memory-list"></div>
+              </details>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
+
+    <script src="/app/assets/app.js"></script>
+  </body>
+</html>

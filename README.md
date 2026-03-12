@@ -110,7 +110,8 @@ uvicorn bcd.api.app:app --reload
 
 Then open:
 
-- [http://127.0.0.1:8000/app](http://127.0.0.1:8000/app) for the user-friendly local demo
+- [http://127.0.0.1:8000/app/setup](http://127.0.0.1:8000/app/setup) for user setup
+- [http://127.0.0.1:8000/app/predict](http://127.0.0.1:8000/app/predict) for the prediction workspace
 - [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) for Swagger / raw API testing
 
 ### 4. Run the local demo flow
@@ -159,7 +160,7 @@ Supported prediction modes:
 You can do this either:
 
 - by setting environment variables before starting the server, or
-- directly inside the `/app` browser demo by entering the API key, base URL, and model in the LLM settings section
+- directly inside the `/app/predict` browser demo by entering the API key, base URL, and model in the LLM settings section
 
 ## Minimal API flow
 
@@ -225,7 +226,10 @@ This keeps the system interpretable enough for debugging while still showing a c
 
 ## User-friendly local demo
 
-The project now includes a browser-based local demo at `/app`.
+The project now includes a browser-based local demo split across two pages:
+
+- `/app/setup` for user creation, profile signal review, and recent-state management
+- `/app/predict` for prompt entry, option ranking, result inspection, and feedback
 
 It is intended for someone who wants to try the system quickly without manually composing API requests.
 
@@ -233,12 +237,11 @@ You can:
 
 - create a profile from `MBTI + multiple-choice onboarding`
 - import a ChatGPT data export (`.zip` or `conversations.json`) to bootstrap a profile in one step
-- review extracted profile signals and correct them in place
-- add temporary recent-state notes that affect the next prediction
+- review extracted profile signals and correct them in place on the setup page
+- add temporary recent-state notes that affect the next prediction on the setup page
 - load the sample user profile
-- type a decision question
-- enter candidate options
-- add simple context values
+- type a decision question on the prediction page
+- enter candidate options and simple context values
 - switch between `baseline`, `hybrid`, and `llm`
 - see the predicted choice, confidence, explanation, and retrieved memories
 - submit actual feedback after the prediction, including structured miss reasons

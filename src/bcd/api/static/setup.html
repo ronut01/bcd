@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>bcd user setup</title>
+    <link rel="stylesheet" href="/app/assets/styles.css" />
+  </head>
+  <body data-page="setup">
+    <div class="shell">
+      <nav class="nav">
+        <a class="brand" href="/app/setup">bcd</a>
+        <div class="nav-links">
+          <a class="nav-link active" href="/app/setup">User setup</a>
+          <a class="nav-link" href="/app/predict">Prediction workspace</a>
+        </div>
+      </nav>
+
+      <section class="hero">
+        <article class="panel hero-copy">
+          <span class="eyebrow">Personalized choice prediction</span>
+          <h1>Set up the user once. Predict choices from a cleaner main workspace.</h1>
+          <p>
+            This page is for user setup only: create or import a profile, review stable signals,
+            and adjust recent state before moving into the main prediction workflow.
+          </p>
+        </article>
+        <aside class="panel hero-side">
+          <div class="metric-strip">
+            <div class="metric">
+              <span class="mini">Active user</span>
+              <strong id="setup-metric-user">None</strong>
+            </div>
+            <div class="metric">
+              <span class="mini">Signals</span>
+              <strong id="setup-metric-signals">0</strong>
+            </div>
+            <div class="metric">
+              <span class="mini">Recent notes</span>
+              <strong id="setup-metric-notes">0</strong>
+            </div>
+          </div>
+          <p>
+            Keep the settings workflow here. The prediction page only handles prompt entry,
+            option ranking, result inspection, and feedback.
+          </p>
+          <div class="button-row inline">
+            <a class="button-link primary" href="/app/predict">Open prediction workspace</a>
+          </div>
+        </aside>
+      </section>
+
+      <div id="setup-status" class="status">Choose a user source or load an existing active user.</div>
+
+      <section class="layout two-col">
+        <div class="stack">
+          <article class="panel">
+            <span class="section-tag">Step 1</span>
+            <h2>Create or load a user</h2>
+            <p class="help">Start with the built-in sample profile, a structured onboarding flow, or a ChatGPT export import.</p>
+            <div class="stack top-gap">
+              <div class="button-row inline">
+                <button class="primary" id="bootstrap-button" type="button">Load sample profile</button>
+              </div>
+
+              <div class="split-cards">
+                <section class="soft-block stack">
+                  <div>
+                    <h3>Manual onboarding</h3>
+                    <p class="help">Use MBTI plus a short multiple-choice questionnaire for a cleaner structured cold-start profile.</p>
+                  </div>
+                  <div class="field">
+                    <label for="onboarding-display-name">Display name</label>
+                    <input id="onboarding-display-name" placeholder="Your name or alias" />
+                  </div>
+                  <div class="field">
+                    <label for="onboarding-mbti">MBTI</label>
+                    <select id="onboarding-mbti"></select>
+                  </div>
+                  <div class="stack" id="onboarding-questionnaire"></div>
+                  <div class="field">
+                    <label>Structured profile preview</label>
+                    <pre id="onboarding-preview-output">Preview the stable profile that these answers would create.</pre>
+                  </div>
+                  <div class="button-row inline">
+                    <button class="secondary" id="preview-profile-button" type="button">Preview profile</button>
+                    <button class="primary" id="create-profile-button" type="button">Create profile</button>
+                  </div>
+                </section>
+
+                <section class="soft-block stack">
+                  <div>
+                    <h3>Import ChatGPT export</h3>
+                    <p class="help">Upload a ChatGPT export `.zip` or `conversations.json` to infer a starter profile and seed memories.</p>
+                  </div>
+                  <div class="field">
+                    <label for="import-display-name">Display name</label>
+                    <input id="import-display-name" placeholder="Name for the imported profile" />
+                  </div>
+                  <div class="field">
+                    <label for="chatgpt-export-file">ChatGPT export file</label>
+                    <input id="chatgpt-export-file" type="file" accept=".zip,.json" />
+                  </div>
+                  <div class="field">
+                    <label for="import-note">What this does</label>
+                    <textarea id="import-note" disabled>It scans user-authored messages, extracts recurring preference statements, builds a starter profile summary, and creates seed memories for later decision prediction.</textarea>
+                  </div>
+                  <div class="button-row inline">
+                    <button class="primary" id="import-profile-button" type="button">Import profile</button>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <span class="section-tag">Step 2</span>
+            <h2>Review stable profile</h2>
+            <div id="setup-empty-state" class="empty-state">
+              <strong>No active user yet.</strong>
+              <p>Create a user above, or load the sample profile to review stable profile artifacts here.</p>
+            </div>
+            <div id="setup-user-workspace" class="stack hidden top-gap">
+              <div class="split-cards">
+                <section class="list-card">
+                  <span class="mini">Active user</span>
+                  <strong id="setup-user-name">-</strong>
+                  <div class="mini" id="setup-user-id">-</div>
+                  <p id="setup-user-summary" class="help">Profile summary will appear here.</p>
+                  <div class="chip-row top-gap-sm" id="setup-profile-meta"></div>
+                  <div class="button-row inline top-gap-sm">
+                    <button class="secondary" id="refresh-user-button" type="button">Refresh user workspace</button>
+                    <a class="button-link primary" href="/app/predict">Start predicting</a>
+                  </div>
+                </section>
+                <section class="list-card">
+                  <span class="mini">Snapshot highlights</span>
+                  <strong id="setup-snapshot-title">Latest preference snapshot</strong>
+                  <p id="setup-snapshot-summary" class="help">Recent drift markers and short-term notes will appear here.</p>
+                </section>
+              </div>
+
+              <div class="split-cards">
+                <section class="list-card">
+                  <h3>Stable profile at a glance</h3>
+                  <div class="signal-list top-gap-sm" id="stable-highlights">
+                    <div class="signal-item"><div class="mini">Stable preference highlights will appear here.</div></div>
+                  </div>
+                </section>
+                <section class="list-card">
+                  <h3>Recent drift and temporary state</h3>
+                  <div class="signal-list top-gap-sm" id="recent-summary-list">
+                    <div class="signal-item"><div class="mini">Recent-state highlights will appear here.</div></div>
+                  </div>
+                </section>
+              </div>
+
+              <section class="list-card">
+                <div class="section-header">
+                  <div>
+                    <h3>Profile signals</h3>
+                    <p class="help">See the review queue first. Already reviewed signals stay collapsed unless you need to inspect them.</p>
+                  </div>
+                </div>
+                <div class="chip-row top-gap-sm" id="signal-summary"></div>
+                <div class="signal-list top-gap-sm" id="pending-signal-list">
+                  <div class="signal-item"><div class="mini">Pending signals will appear here.</div></div>
+                </div>
+                <details class="top-gap-sm">
+                  <summary class="summary-trigger">Reviewed signals</summary>
+                  <div class="signal-list top-gap-sm" id="reviewed-signal-list">
+                    <div class="signal-item"><div class="mini">Reviewed signals will appear here.</div></div>
+                  </div>
+                </details>
+              </section>
+
+              <details>
+                <summary class="summary-trigger">Advanced profile artifacts</summary>
+                <div class="split-cards top-gap-sm">
+                  <section class="list-card">
+                    <h3>Raw profile card</h3>
+                    <pre id="profile-card-output">Profile card output will appear here.</pre>
+                  </section>
+                  <section class="list-card">
+                    <h3>Raw recent-state summary</h3>
+                    <pre id="recent-state-summary-output">Recent state summary will appear here.</pre>
+                  </section>
+                </div>
+              </details>
+            </div>
+          </article>
+        </div>
+
+        <div class="stack">
+          <article class="panel">
+            <span class="section-tag">Step 3</span>
+            <h2>Set recent state</h2>
+            <p class="help">Temporary notes live here so the main prediction workspace stays focused on the actual choice question.</p>
+            <div class="stack top-gap">
+              <div class="field">
+                <label for="recent-state-note">Add a temporary recent-state note</label>
+                <textarea id="recent-state-note" placeholder="Example: Today the user is unusually tired and wants the easiest option."></textarea>
+              </div>
+              <div class="button-row inline">
+                <button class="secondary" id="add-recent-state-note-button" type="button">Add recent-state note</button>
+              </div>
+              <div class="signal-list" id="recent-state-list">
+                <div class="signal-item"><div class="mini">Recent-state notes will appear here.</div></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <span class="section-tag">Inspect</span>
+            <h2>Recent history</h2>
+            <p class="help">Only the latest decisions are shown here by default. Full raw history stays tucked away.</p>
+            <div class="signal-list top-gap" id="history-summary-list">
+              <div class="signal-item"><div class="mini">Recent decisions will appear here.</div></div>
+            </div>
+            <details class="top-gap-sm">
+              <summary class="summary-trigger">Raw history payload</summary>
+              <pre id="history-output" class="top-gap-sm">Recent history will appear here.</pre>
+            </details>
+          </article>
+        </div>
+      </section>
+    </div>
+
+    <script src="/app/assets/app.js"></script>
+  </body>
+</html>

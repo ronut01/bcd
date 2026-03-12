@@ -14,11 +14,17 @@ def test_api_happy_path(configured_env):
 
     root_response = client.get("/", follow_redirects=False)
     assert root_response.status_code == 307
-    assert root_response.headers["location"] == "/app"
+    assert root_response.headers["location"] == "/app/setup"
 
-    app_response = client.get("/app")
-    assert app_response.status_code == 200
-    assert "local demo" in app_response.text.lower()
+    app_response = client.get("/app", follow_redirects=False)
+    assert app_response.status_code == 307
+    assert app_response.headers["location"] == "/app/setup"
+    setup_response = client.get("/app/setup")
+    assert setup_response.status_code == 200
+    assert "user setup" in setup_response.text.lower()
+    predict_response = client.get("/app/predict")
+    assert predict_response.status_code == 200
+    assert "prediction workspace" in predict_response.text.lower()
 
     questionnaire_response = client.get("/profiles/onboarding-questionnaire")
     assert questionnaire_response.status_code == 200
