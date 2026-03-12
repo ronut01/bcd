@@ -29,6 +29,8 @@ class UserProfileRead(BaseModel):
     memory_count: int = 0
     history_count: int = 0
     profile_card_path: str | None = None
+    signal_count: int = 0
+    pending_signal_count: int = 0
 
 
 class OnboardingQuestionOptionRead(BaseModel):
@@ -73,3 +75,44 @@ class ChatGPTImportResponse(BaseModel):
     user_profile: UserProfileRead
     import_source: Literal["chatgpt_export"] = "chatgpt_export"
     import_stats: dict = Field(default_factory=dict)
+
+
+class ProfileSignalRead(BaseModel):
+    signal_id: str
+    user_id: str
+    source_type: str
+    signal_kind: str
+    signal_name: str
+    proposed_value: dict = Field(default_factory=dict)
+    current_value: dict | None = None
+    evidence_text: str
+    review_note: str | None = None
+    status: Literal["pending", "accepted", "rejected", "edited"]
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProfileSignalReviewInput(BaseModel):
+    action: Literal["accept", "reject", "edit"]
+    edited_value: dict | None = None
+    review_note: str | None = None
+
+
+class ProfileSignalReviewResponse(BaseModel):
+    signal: ProfileSignalRead
+    user_profile: UserProfileRead
+
+
+class RecentStateNoteInput(BaseModel):
+    note_text: str
+    tags: list[str] = Field(default_factory=list)
+
+
+class RecentStateNoteRead(BaseModel):
+    note_id: str
+    user_id: str
+    note_text: str
+    tags: list[str] = Field(default_factory=list)
+    active: bool
+    created_at: datetime
+    updated_at: datetime

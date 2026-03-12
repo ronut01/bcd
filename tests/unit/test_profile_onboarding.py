@@ -9,7 +9,8 @@ def test_manual_onboarding_creates_profile_and_seed_memories(configured_env):
     init_db(settings)
 
     with session_scope(settings.database_url) as session:
-        profile = ProfileService(session, settings).create_profile_from_onboarding(
+        service = ProfileService(session, settings)
+        profile = service.create_profile_from_onboarding(
             UserOnboardingInput(
                 display_name="Casey",
                 mbti="ISTJ",
@@ -29,8 +30,11 @@ def test_manual_onboarding_creates_profile_and_seed_memories(configured_env):
                 ],
             )
         )
+        signals = service.get_profile_signals(profile.user_id)
 
     assert profile.user_id.startswith("casey-")
     assert profile.memory_count >= 1
     assert profile.profile_card_path is not None
+    assert profile.signal_count >= 3
     assert any(item.get("question_id") == "meal_when_tired" for item in profile.onboarding_answers)
+    assert all(signal.status == "accepted" for signal in signals)

@@ -55,8 +55,10 @@ class OpenAICompatibleLLMRanker:
             endpoint = f"{endpoint}/chat/completions"
 
         system_prompt = (
-            "You predict which option a specific user is most likely to choose. "
-            "Use the provided profile card, context, and memories. "
+            "You predict which option a specific user is most likely to choose in practice. "
+            "Use retrieved memories as the strongest evidence, then current context, then stable profile signals. "
+            "Treat the heuristic ranking as a weak prior, not as ground truth. "
+            "Do not recommend the objectively best option unless it is also the most likely human choice. "
             "Return strict JSON with keys ranked_options and explanation."
         )
         user_prompt = json.dumps(
@@ -70,10 +72,13 @@ class OpenAICompatibleLLMRanker:
                 "stable_profile_markdown": request.stable_profile_markdown,
                 "recent_state_markdown": request.recent_state_markdown,
                 "retrieved_memory_summaries": request.memory_summaries,
+                "memory_evidence": request.memory_evidence,
+                "reviewed_profile_signals": request.reviewed_profile_signals,
                 "heuristic_ranking": request.heuristic_ranking,
                 "requirements": {
                     "rank_all_options": True,
                     "top_choice_should_reflect_user_likelihood": True,
+                    "ground_explanation_in_recent_memories_and_context": True,
                     "output_json_only": True,
                 },
                 "output_schema": {

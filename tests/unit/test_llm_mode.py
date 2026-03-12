@@ -14,6 +14,8 @@ class StubLLMRanker:
         assert "Stable Profile Card" in request.profile_card_markdown
         assert request.stable_profile_markdown is not None
         assert request.recent_state_markdown is not None
+        assert request.reviewed_profile_signals
+        assert request.memory_evidence
         return LLMRankingResult(
             ranked_options=[
                 "Greasy burger",

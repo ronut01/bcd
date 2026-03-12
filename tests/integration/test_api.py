@@ -32,6 +32,17 @@ def test_api_happy_path(configured_env):
     card_response = client.get(f"/profiles/{user_id}/card")
     assert card_response.status_code == 200
     assert "content" in card_response.json()
+    signals_response = client.get(f"/profiles/{user_id}/signals")
+    assert signals_response.status_code == 200
+    assert len(signals_response.json()) >= 1
+    recent_state_create = client.post(
+        f"/profiles/{user_id}/recent-state",
+        json={"note_text": "Today the user is unusually tired and wants low-friction choices.", "tags": ["tired"]},
+    )
+    assert recent_state_create.status_code == 200
+    recent_state_list = client.get(f"/profiles/{user_id}/recent-state")
+    assert recent_state_list.status_code == 200
+    assert len(recent_state_list.json()) == 1
 
     prediction_response = client.post(
         "/decisions/predict",
@@ -56,9 +67,13 @@ def test_api_happy_path(configured_env):
             "actual_option_id": prediction_payload["predicted_option_id"],
             "reason_text": "Wanted something warm and easy.",
             "reason_tags": ["warm", "easy"],
+            "failure_reasons": ["context_missing"],
+            "context_updates": {"energy": "very_low"},
+            "preference_shift_note": "Rain made comfort more important.",
         },
     )
     assert feedback_response.status_code == 200
+    assert feedback_response.json()["reflection_id"]
 
     history_response = client.get(f"/users/{user_id}/history")
     memories_response = client.get(f"/users/{user_id}/memories")
@@ -86,7 +101,10 @@ def test_api_happy_path(configured_env):
         },
     )
     assert onboarding_response.status_code == 200
-    assert onboarding_response.json()["user_id"].startswith("taylor-")
+    onboarded_user_id = onboarding_response.json()["user_id"]
+    assert onboarded_user_id.startswith("taylor-")
+    reviewed_signal = client.get(f"/profiles/{onboarded_user_id}/signals")
+    assert reviewed_signal.status_code == 200
 
     fixture_path = Path(__file__).resolve().parents[1] / "fixtures" / "chatgpt_conversations.json"
     with fixture_path.open("rb") as handle:
@@ -96,4 +114,18 @@ def test_api_happy_path(configured_env):
             files={"file": ("conversations.json", handle, "application/json")},
         )
     assert import_response.status_code == 200
-    assert import_response.json()["user_profile"]["user_id"].startswith("morgan-")
+    imported_user_id = import_response.json()["user_profile"]["user_id"]
+    assert imported_user_id.startswith("morgan-")
+    imported_signals = client.get(f"/profiles/{imported_user_id}/signals")
+    assert imported_signals.status_code == 200
+    pending_signal = next(item for item in imported_signals.json() if item["status"] == "pending")
+    signal_review_response = client.post(
+        f"/profiles/{imported_user_id}/signals/{pending_signal['signal_id']}/review",
+        json={
+            "action": "edit",
+            "edited_value": {"label": "curated signal"},
+            "review_note": "User corrected the inferred label.",
+        },
+    )
+    assert signal_review_response.status_code == 200
+    assert signal_review_response.json()["signal"]["status"] == "edited"

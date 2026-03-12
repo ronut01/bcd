@@ -68,10 +68,14 @@ class FeedbackInput(BaseModel):
     actual_option_id: str
     reason_text: str | None = None
     reason_tags: list[str] = Field(default_factory=list)
+    failure_reasons: list[str] = Field(default_factory=list)
+    context_updates: dict = Field(default_factory=dict)
+    preference_shift_note: str | None = None
 
 
 class FeedbackResponse(BaseModel):
     feedback_id: str
+    reflection_id: str
     request_id: str
     actual_option_id: str
     actual_option_text: str

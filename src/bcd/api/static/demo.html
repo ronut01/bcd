@@ -258,7 +258,9 @@
 
       .chip-row,
       .memory-list,
-      .rank-list {
+      .rank-list,
+      .signal-list,
+      .checkbox-list {
         display: grid;
         gap: 10px;
       }
@@ -274,7 +276,8 @@
       }
 
       .rank-item,
-      .memory-item {
+      .memory-item,
+      .signal-item {
         padding: 14px;
         border-radius: 16px;
         background: var(--surface);
@@ -282,9 +285,17 @@
       }
 
       .rank-item strong,
-      .memory-item strong {
+      .memory-item strong,
+      .signal-item strong {
         display: block;
         margin-bottom: 6px;
+      }
+
+      .checkbox-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        color: var(--muted);
       }
 
       .mini {
@@ -536,7 +547,7 @@
 
           <article class="panel hidden" id="feedback-panel">
             <h2>Feedback</h2>
-            <p class="help">After a prediction, you can record the actual choice so the memory store updates.</p>
+            <p class="help">After a prediction, record the actual choice, why the system missed, and any context shift so both memory and analysis update.</p>
             <div class="stack" style="margin-top: 16px;">
               <div class="field">
                 <label for="actual-option">Actual chosen option</label>
@@ -549,6 +560,18 @@
               <div class="field">
                 <label for="reason-tags">Reason tags</label>
                 <input id="reason-tags" placeholder="warm, easy, social" />
+              </div>
+              <div class="field">
+                <label>Why might the prediction have been wrong?</label>
+                <div class="checkbox-list" id="failure-reason-list"></div>
+              </div>
+              <div class="field">
+                <label for="preference-shift-note">Preference shift note</label>
+                <textarea id="preference-shift-note" placeholder="Optional: describe any temporary or lasting shift in preference"></textarea>
+              </div>
+              <div class="field">
+                <label for="context-updates">Context updates (JSON)</label>
+                <textarea id="context-updates" placeholder='Optional JSON, for example {"energy":"lower_than_expected"}'></textarea>
               </div>
               <div class="button-row">
                 <button class="primary" id="feedback-button">Save feedback</button>
@@ -597,6 +620,27 @@
                 <h3>Recent history</h3>
                 <pre id="history-output">Recent history will appear here.</pre>
               </div>
+              <div>
+                <h3>Recent state notes</h3>
+                <div class="stack">
+                  <div class="field">
+                    <label for="recent-state-note">Add a temporary recent-state note</label>
+                    <textarea id="recent-state-note" placeholder="Example: Today the user is unusually tired and wants the easiest option."></textarea>
+                  </div>
+                  <div class="button-row">
+                    <button class="secondary" id="add-recent-state-note-button" type="button">Add recent-state note</button>
+                  </div>
+                  <div class="signal-list" id="recent-state-list">
+                    <div class="signal-item"><div class="mini">Recent-state notes will appear here.</div></div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h3>Profile signals</h3>
+                <div class="signal-list" id="signal-list">
+                  <div class="signal-item"><div class="mini">Profile signals will appear here.</div></div>
+                </div>
+              </div>
             </div>
           </article>
         </div>
@@ -618,6 +662,8 @@
       const predictionContent = document.getElementById("prediction-content");
       const profileCardOutput = document.getElementById("profile-card-output");
       const historyOutput = document.getElementById("history-output");
+      const signalList = document.getElementById("signal-list");
+      const recentStateList = document.getElementById("recent-state-list");
       const metricUser = document.getElementById("metric-user");
       const metricMode = document.getElementById("metric-mode");
       const metricConfidence = document.getElementById("metric-confidence");
@@ -630,6 +676,14 @@
         "Warm noodle soup",
         "Greasy burger",
         "Raw salad"
+      ];
+      const failureReasonOptions = [
+        { id: "stable_profile_wrong", label: "Stable profile was wrong" },
+        { id: "recent_state_not_captured", label: "Recent state was not captured" },
+        { id: "context_missing", label: "Important context was missing" },
+        { id: "similar_memory_missing", label: "Relevant past memory was missing" },
+        { id: "option_wording_misleading", label: "Option wording was misleading" },
+        { id: "spontaneous_change", label: "The choice was a spontaneous exception" }
       ];
 
       function setStatus(message, error = false) {
@@ -654,6 +708,24 @@
         optionList.appendChild(row);
       }
 
+      function renderFailureReasonOptions() {
+        const container = document.getElementById("failure-reason-list");
+        container.innerHTML = "";
+        failureReasonOptions.forEach((item) => {
+          const row = document.createElement("label");
+          row.className = "checkbox-row";
+          row.innerHTML = `
+            <input type="checkbox" value="${item.id}" />
+            <span>${item.label}</span>
+          `;
+          container.appendChild(row);
+        });
+      }
+
+      function getSelectedFailureReasons() {
+        return Array.from(document.querySelectorAll("#failure-reason-list input:checked")).map((node) => node.value);
+      }
+
       function resetForm() {
         document.getElementById("user-id").value = "sample-alex";
         document.getElementById("category").value = "food";
@@ -666,12 +738,22 @@
         document.getElementById("budget").value = "";
         document.getElementById("urgency").value = "";
         document.getElementById("prediction-mode").value = "baseline";
+        document.getElementById("reason-text").value = "";
+        document.getElementById("reason-tags").value = "";
+        document.getElementById("preference-shift-note").value = "";
+        document.getElementById("context-updates").value = "";
+        document.getElementById("recent-state-note").value = "";
+        document.querySelectorAll("#failure-reason-list input").forEach((node) => {
+          node.checked = false;
+        });
         optionList.innerHTML = "";
         defaultOptions.forEach(createOptionRow);
         feedbackPanel.classList.add("hidden");
         predictionEmpty.classList.remove("hidden");
         predictionContent.classList.add("hidden");
         latestPrediction = null;
+        signalList.innerHTML = `<div class="signal-item"><div class="mini">Profile signals will appear here.</div></div>`;
+        recentStateList.innerHTML = `<div class="signal-item"><div class="mini">Recent-state notes will appear here.</div></div>`;
         setStatus("Ready. Load the sample profile or run a prediction directly.");
       }
 
@@ -854,6 +936,116 @@
         historyOutput.textContent = JSON.stringify(payload, null, 2);
       }
 
+      async function loadSignals() {
+        const userId = document.getElementById("user-id").value.trim();
+        const payload = await request(`/profiles/${encodeURIComponent(userId)}/signals`);
+        renderSignals(payload);
+      }
+
+      function renderSignals(signals) {
+        signalList.innerHTML = "";
+        if (!signals.length) {
+          signalList.innerHTML = `<div class="signal-item"><div class="mini">No profile signals are available for this user.</div></div>`;
+          return;
+        }
+
+        signals.forEach((signal) => {
+          const node = document.createElement("div");
+          node.className = "signal-item";
+          node.innerHTML = `
+            <strong>${signal.signal_kind}: ${signal.signal_name}</strong>
+            <div class="mini">status: ${signal.status} | source: ${signal.source_type}</div>
+            <div class="mini">current: ${JSON.stringify(signal.current_value ?? signal.proposed_value)}</div>
+            <div class="mini">evidence: ${signal.evidence_text}</div>
+            ${signal.review_note ? `<div class="mini">review note: ${signal.review_note}</div>` : ""}
+            <div class="button-row" style="margin-top: 10px;">
+              <button class="secondary" type="button" data-action="accept">Accept</button>
+              <button class="secondary" type="button" data-action="edit">Edit</button>
+              <button class="danger" type="button" data-action="reject">Reject</button>
+            </div>
+          `;
+          node.querySelectorAll("button").forEach((button) => {
+            button.addEventListener("click", async () => {
+              try {
+                await reviewSignal(signal, button.dataset.action);
+              } catch (error) {
+                setStatus(error.message, true);
+              }
+            });
+          });
+          signalList.appendChild(node);
+        });
+      }
+
+      async function reviewSignal(signal, action) {
+        const userId = document.getElementById("user-id").value.trim();
+        let editedValue = null;
+        let reviewNote = "";
+        if (action === "edit") {
+          const initial = JSON.stringify(signal.current_value ?? signal.proposed_value, null, 2);
+          const value = window.prompt("Edit the signal JSON", initial);
+          if (!value) {
+            return;
+          }
+          editedValue = JSON.parse(value);
+        }
+        if (action !== "accept") {
+          reviewNote = window.prompt("Optional review note", signal.review_note || "") || "";
+        }
+        setStatus(`Updating signal '${signal.signal_name}'...`);
+        await request(`/profiles/${encodeURIComponent(userId)}/signals/${encodeURIComponent(signal.signal_id)}/review`, {
+          method: "POST",
+          body: JSON.stringify({
+            action,
+            edited_value: editedValue,
+            review_note: reviewNote || null
+          })
+        });
+        await loadSignals();
+        await loadProfileCard();
+        setStatus(`Signal '${signal.signal_name}' updated.`);
+      }
+
+      async function loadRecentStateNotes() {
+        const userId = document.getElementById("user-id").value.trim();
+        const payload = await request(`/profiles/${encodeURIComponent(userId)}/recent-state`);
+        renderRecentStateNotes(payload);
+      }
+
+      function renderRecentStateNotes(notes) {
+        recentStateList.innerHTML = "";
+        if (!notes.length) {
+          recentStateList.innerHTML = `<div class="signal-item"><div class="mini">No manual recent-state notes are active.</div></div>`;
+          return;
+        }
+
+        notes.forEach((note) => {
+          const node = document.createElement("div");
+          node.className = "signal-item";
+          node.innerHTML = `
+            <strong>${note.note_text}</strong>
+            <div class="mini">tags: ${(note.tags || []).join(", ") || "none"}</div>
+            <div class="button-row" style="margin-top: 10px;">
+              <button class="danger" type="button">Remove</button>
+            </div>
+          `;
+          node.querySelector("button").addEventListener("click", async () => {
+            try {
+              setStatus("Removing recent-state note...");
+              await request(`/profiles/${encodeURIComponent(note.user_id)}/recent-state/${encodeURIComponent(note.note_id)}`, {
+                method: "DELETE"
+              });
+              await loadRecentStateNotes();
+              await loadProfileCard();
+              setStatus("Recent-state note removed.");
+            } catch (error) {
+              setStatus(error.message, true);
+            }
+          });
+          recentStateList.appendChild(node);
+        });
+      }
+
       function hydrateActiveUser(userId) {
         document.getElementById("user-id").value = userId;
         metricUser.textContent = userId;
@@ -886,6 +1078,8 @@
           setStatus(`Sample profile '${payload.user_id}' is ready.`);
           await loadProfileCard();
           await loadHistory();
+          await loadSignals();
+          await loadRecentStateNotes();
         } catch (error) {
           setStatus(error.message, true);
         }
@@ -915,6 +1109,8 @@
           setStatus(`Created profile '${payload.user_id}'. You can now test predictions for this user.`);
           await loadProfileCard();
           await loadHistory();
+          await loadSignals();
+          await loadRecentStateNotes();
         } catch (error) {
           setStatus(error.message, true);
         }
@@ -943,6 +1139,8 @@
           );
           await loadProfileCard();
           await loadHistory();
+          await loadSignals();
+          await loadRecentStateNotes();
         } catch (error) {
           setStatus(error.message, true);
         }
@@ -952,6 +1150,8 @@
         try {
           setStatus("Loading profile card...");
           await loadProfileCard();
+          await loadSignals();
+          await loadRecentStateNotes();
           setStatus("Profile card loaded.");
         } catch (error) {
           setStatus(error.message, true);
@@ -986,6 +1186,8 @@
           });
           renderPrediction(prediction);
           await loadProfileCard();
+          await loadSignals();
+          await loadRecentStateNotes();
           setStatus(
             prediction.llm_error
               ? `Prediction complete with fallback. Top choice: ${prediction.predicted_option_text}`
@@ -1007,23 +1209,59 @@
             .split(",")
             .map((item) => item.trim())
             .filter(Boolean);
+          let contextUpdates = {};
+          const rawContextUpdates = document.getElementById("context-updates").value.trim();
+          if (rawContextUpdates) {
+            contextUpdates = JSON.parse(rawContextUpdates);
+          }
           await request(`/decisions/${encodeURIComponent(latestPrediction.request_id)}/feedback`, {
             method: "POST",
             body: JSON.stringify({
               actual_option_id: actualOptionSelect.value,
               reason_text: document.getElementById("reason-text").value.trim() || null,
-              reason_tags: reasonTags
+              reason_tags: reasonTags,
+              failure_reasons: getSelectedFailureReasons(),
+              context_updates: contextUpdates,
+              preference_shift_note: document.getElementById("preference-shift-note").value.trim() || null
             })
           });
           await loadHistory();
           await loadProfileCard();
+          await loadSignals();
+          await loadRecentStateNotes();
           setStatus("Feedback saved and memory updated.");
         } catch (error) {
           setStatus(error.message, true);
         }
       });
 
+      document.getElementById("add-recent-state-note-button").addEventListener("click", async () => {
+        try {
+          const userId = document.getElementById("user-id").value.trim();
+          const noteText = document.getElementById("recent-state-note").value.trim();
+          if (!userId || !noteText) {
+            setStatus("Enter a user id and a recent-state note first.", true);
+            return;
+          }
+          setStatus("Saving recent-state note...");
+          await request(`/profiles/${encodeURIComponent(userId)}/recent-state`, {
+            method: "POST",
+            body: JSON.stringify({
+              note_text: noteText,
+              tags: []
+            })
+          });
+          document.getElementById("recent-state-note").value = "";
+          await loadRecentStateNotes();
+          await loadProfileCard();
+          setStatus("Recent-state note saved.");
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      });
+
       loadSavedLlmSettings();
+      renderFailureReasonOptions();
       loadOnboardingQuestionnaire().catch((error) => setStatus(error.message, true));
       resetForm();
     </script>

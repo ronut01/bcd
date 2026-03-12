@@ -12,7 +12,10 @@ from bcd.storage.models import (
     DecisionRequest,
     MemoryEntry,
     PreferenceSnapshot,
+    PredictionReflection,
     PredictionResult,
+    ProfileSignal,
+    RecentStateNote,
     UserProfile,
 )
 
@@ -111,3 +114,34 @@ class BCDRepository:
             .limit(limit)
         )
         return list(self.session.exec(statement))
+
+    def list_profile_signals(self, user_id: str, limit: int = 200) -> list[ProfileSignal]:
+        statement = (
+            select(ProfileSignal)
+            .where(ProfileSignal.user_id == user_id)
+            .order_by(ProfileSignal.created_at.desc())
+            .limit(limit)
+        )
+        return list(self.session.exec(statement))
+
+    def get_profile_signal(self, signal_id: str) -> ProfileSignal | None:
+        return self.session.get(ProfileSignal, signal_id)
+
+    def list_reflections_for_requests(self, request_ids: list[str]) -> list[PredictionReflection]:
+        if not request_ids:
+            return []
+        statement = select(PredictionReflection).where(PredictionReflection.request_id.in_(request_ids))
+        return list(self.session.exec(statement))
+
+    def list_recent_state_notes(self, user_id: str, limit: int = 20) -> list[RecentStateNote]:
+        statement = (
+            select(RecentStateNote)
+            .where(RecentStateNote.user_id == user_id)
+            .where(RecentStateNote.active.is_(True))
+            .order_by(RecentStateNote.created_at.desc())
+            .limit(limit)
+        )
+        return list(self.session.exec(statement))
+
+    def get_recent_state_note(self, note_id: str) -> RecentStateNote | None:
+        return self.session.get(RecentStateNote, note_id)

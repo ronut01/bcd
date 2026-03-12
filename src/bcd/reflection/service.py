@@ -6,7 +6,7 @@ from sqlmodel import Session
 
 from bcd.decision.schemas import FeedbackInput, FeedbackResponse, HistoryEvent
 from bcd.profile.service import ProfileService
-from bcd.storage.models import ActualChoiceFeedback, MemoryEntry
+from bcd.storage.models import ActualChoiceFeedback, MemoryEntry, PredictionReflection
 from bcd.storage.repository import BCDRepository
 from bcd.utils.text import extract_context_tags, flatten_to_text, tokenize
 
@@ -66,12 +66,25 @@ class ReflectionService:
                 salience_score=1.25 if prediction and prediction.predicted_option_id != chosen_option.option_id else 1.0,
             )
         )
+        reflection = self.repository.add(
+            PredictionReflection(
+                request_id=request_id,
+                prediction_id=prediction.prediction_id if prediction else None,
+                actual_option_id=chosen_option.option_id,
+                predicted_option_id=prediction.predicted_option_id if prediction else None,
+                outcome="correct" if prediction and prediction.predicted_option_id == chosen_option.option_id else "miss",
+                failure_reasons_json=payload.failure_reasons,
+                context_updates_json=payload.context_updates,
+                preference_shift_note=payload.preference_shift_note,
+            )
+        )
         snapshot = self.profile_service._rebuild_snapshot(request.user_id)
         snapshot = self.repository.add(snapshot)
         self.profile_service.ensure_profile_card(request.user_id)
 
         return FeedbackResponse(
             feedback_id=feedback.feedback_id,
+            reflection_id=reflection.reflection_id,
             request_id=request_id,
             actual_option_id=chosen_option.option_id,
             actual_option_text=chosen_option.option_text,
@@ -86,12 +99,14 @@ class ReflectionService:
         request_ids = [request.request_id for request in requests]
         predictions = {item.request_id: item for item in self.repository.list_predictions_for_requests(request_ids)}
         feedbacks = {item.request_id: item for item in self.repository.list_feedback_for_user_requests(request_ids)}
+        reflections = {item.request_id: item for item in self.repository.list_reflections_for_requests(request_ids)}
 
         history: list[HistoryEvent] = []
         for request in requests:
             options = self.repository.list_options_for_request(request.request_id)
             feedback = feedbacks.get(request.request_id)
             prediction = predictions.get(request.request_id)
+            reflection = reflections.get(request.request_id)
             history.append(
                 HistoryEvent(
                     request_id=request.request_id,
@@ -122,6 +137,9 @@ class ReflectionService:
                         "actual_option_id": feedback.actual_option_id,
                         "reason_text": feedback.reason_text,
                         "reason_tags": feedback.reason_tags_json,
+                        "failure_reasons": reflection.failure_reasons_json if reflection else [],
+                        "context_updates": reflection.context_updates_json if reflection else {},
+                        "preference_shift_note": reflection.preference_shift_note if reflection else None,
                     }
                     if feedback
                     else None,

@@ -90,3 +90,41 @@ class PreferenceSnapshot(SQLModel, table=True):
     drift_markers_json: list = Field(default_factory=list, sa_column=Column(JSON))
     derived_statistics_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=utc_now, index=True)
+
+
+class ProfileSignal(SQLModel, table=True):
+    signal_id: str = Field(default_factory=generate_id, primary_key=True)
+    user_id: str = Field(index=True, foreign_key="userprofile.user_id")
+    source_type: str = Field(index=True)
+    signal_kind: str = Field(index=True)
+    signal_name: str = Field(index=True)
+    proposed_value_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    current_value_json: dict | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    evidence_text: str = Field(sa_column=Column(Text))
+    review_note: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    status: str = Field(default="pending", index=True)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, index=True)
+
+
+class PredictionReflection(SQLModel, table=True):
+    reflection_id: str = Field(default_factory=generate_id, primary_key=True)
+    request_id: str = Field(index=True, foreign_key="decisionrequest.request_id")
+    prediction_id: str | None = Field(default=None, foreign_key="predictionresult.prediction_id")
+    actual_option_id: str = Field(foreign_key="decisionoption.option_id")
+    predicted_option_id: str | None = Field(default=None, foreign_key="decisionoption.option_id")
+    outcome: str = Field(index=True)
+    failure_reasons_json: list = Field(default_factory=list, sa_column=Column(JSON))
+    context_updates_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    preference_shift_note: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+
+
+class RecentStateNote(SQLModel, table=True):
+    note_id: str = Field(default_factory=generate_id, primary_key=True)
+    user_id: str = Field(index=True, foreign_key="userprofile.user_id")
+    note_text: str = Field(sa_column=Column(Text))
+    tags_json: list = Field(default_factory=list, sa_column=Column(JSON))
+    active: bool = True
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+    updated_at: datetime = Field(default_factory=utc_now, index=True)

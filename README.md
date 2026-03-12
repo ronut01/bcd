@@ -41,8 +41,11 @@ This makes the project a strong foundation for future work in:
 - retrieve relevant memories and prior decision patterns
 - predict the most likely user choice with confidence and explanation
 - log actual user feedback and reasons
+- review, accept, reject, or edit extracted profile signals
+- add and remove manual recent-state notes separately from stable profile signals
+- store structured failure reasons when predictions miss
 - update memory and short-term preference snapshots
-- generate a Markdown `profile_card` for LLM-facing user modeling
+- generate split Markdown cards for `stable profile` and `recent state`
 - optionally use an OpenAI-compatible LLM for ranking
 - expose a local FastAPI interface, CLI demo, and evaluation script
 
@@ -229,19 +232,26 @@ You can:
 
 - create a profile from `MBTI + multiple-choice onboarding`
 - import a ChatGPT data export (`.zip` or `conversations.json`) to bootstrap a profile in one step
+- review extracted profile signals and correct them in place
+- add temporary recent-state notes that affect the next prediction
 - load the sample user profile
 - type a decision question
 - enter candidate options
 - add simple context values
 - switch between `baseline`, `hybrid`, and `llm`
 - see the predicted choice, confidence, explanation, and retrieved memories
-- submit actual feedback after the prediction
+- submit actual feedback after the prediction, including structured miss reasons
 
 ## Core API endpoints
 
 - `POST /profiles/bootstrap-sample`
 - `POST /profiles/onboard`
 - `POST /profiles/import-chatgpt-export`
+- `GET /profiles/{user_id}/signals`
+- `POST /profiles/{user_id}/signals/{signal_id}/review`
+- `GET /profiles/{user_id}/recent-state`
+- `POST /profiles/{user_id}/recent-state`
+- `DELETE /profiles/{user_id}/recent-state/{note_id}`
 - `GET /profiles/{user_id}`
 - `GET /profiles/{user_id}/card`
 - `POST /decisions/predict`

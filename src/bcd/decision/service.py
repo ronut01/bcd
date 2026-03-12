@@ -96,6 +96,8 @@ class DecisionService:
         )
         profile_card_path = self.profile_service.ensure_profile_card(payload.user_id)
         profile_card_payload = self.profile_service.get_profile_card(payload.user_id)
+        profile_signals = self.profile_service.get_profile_signals(payload.user_id)
+        recent_state_notes = self.profile_service.list_recent_state_notes(payload.user_id)
         profile_card_markdown = profile_card_payload["content"]
 
         heuristic_scored = [
@@ -106,6 +108,7 @@ class DecisionService:
                 payload.context,
                 payload.category,
                 retrieved_memories,
+                recent_state_notes=[note.note_text for note in recent_state_notes],
             )
             for option in options
         ]
@@ -122,6 +125,7 @@ class DecisionService:
             stable_profile_markdown=profile_card_payload.get("stable_content"),
             recent_state_markdown=profile_card_payload.get("recent_content"),
             heuristic_ranked=heuristic_ranked,
+            profile_signals=profile_signals,
         )
         ranked, strategy, explanation, llm_used = self._resolve_final_ranking(
             prediction_mode=prediction_mode,
@@ -202,6 +206,7 @@ class DecisionService:
         stable_profile_markdown: str | None,
         recent_state_markdown: str | None,
         heuristic_ranked: list[_OptionScore],
+        profile_signals,
     ) -> tuple[LLMRankingResult | None, str | None]:
         if prediction_mode == "baseline":
             return None, None
@@ -218,6 +223,27 @@ class DecisionService:
             stable_profile_markdown=stable_profile_markdown,
             recent_state_markdown=recent_state_markdown,
             heuristic_ranking=[item.option.option_text for item in heuristic_ranked],
+            reviewed_profile_signals=[
+                {
+                    "signal_kind": signal.signal_kind,
+                    "signal_name": signal.signal_name,
+                    "status": signal.status,
+                    "current_value": signal.current_value,
+                }
+                for signal in profile_signals
+                if signal.status != "rejected"
+            ][:20],
+            memory_evidence=[
+                {
+                    "category": memory.category,
+                    "chosen_option_text": memory.chosen_option_text,
+                    "summary": memory.summary,
+                    "retrieval_score": memory.retrieval_score,
+                    "matched_terms": memory.matched_terms,
+                    "tags": memory.tags,
+                }
+                for memory in retrieved_memories
+            ],
         )
         try:
             result = ranker.rank(request)
@@ -340,6 +366,7 @@ class DecisionService:
         context: dict,
         category: str,
         retrieved_memories,
+        recent_state_notes: list[str],
     ) -> _OptionScore:
         option_tokens = set(tokenize(option.option_text) + tokenize(flatten_to_text(option.option_metadata_json)))
         reasons: list[str] = []
@@ -397,6 +424,13 @@ class DecisionService:
             recent_trend_bonus += tag_overlap * 0.25
             if tag_overlap:
                 reasons.append("Its wording overlaps with recent short-term preference signals.")
+
+        if recent_state_notes:
+            manual_recent_tokens = set(tokenize(" ".join(recent_state_notes)))
+            note_overlap = overlap_count(option_tokens, manual_recent_tokens)
+            recent_trend_bonus += note_overlap * 0.3
+            if note_overlap:
+                reasons.append("It matches the user's manually provided recent-state notes.")
 
         if context_tokens:
             direct_context_overlap = overlap_count(option_tokens, context_tokens)

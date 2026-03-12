@@ -30,8 +30,12 @@ def test_feedback_creates_memory_and_updates_snapshot(configured_env):
                 actual_option_id=prediction.predicted_option_id,
                 reason_text="Needed a realistic and structured plan.",
                 reason_tags=["structured", "urgent"],
+                failure_reasons=["context_missing"],
+                context_updates={"deadline": "tonight"},
+                preference_shift_note="Urgency outweighed normal exploration.",
             ),
         )
 
     assert result.created_memory_id
+    assert result.reflection_id
     assert result.updated_snapshot_id

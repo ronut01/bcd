@@ -19,6 +19,8 @@ class LLMRankingRequest(BaseModel):
     stable_profile_markdown: str | None = None
     recent_state_markdown: str | None = None
     heuristic_ranking: list[str] = Field(default_factory=list)
+    reviewed_profile_signals: list[dict] = Field(default_factory=list)
+    memory_evidence: list[dict] = Field(default_factory=list)
 
 
 class LLMRankingResult(BaseModel):

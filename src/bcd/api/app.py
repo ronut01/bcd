@@ -15,6 +15,11 @@ from bcd.decision.service import DecisionService
 from bcd.profile.schemas import (
     ChatGPTImportResponse,
     OnboardingQuestionnaireRead,
+    ProfileSignalRead,
+    ProfileSignalReviewInput,
+    ProfileSignalReviewResponse,
+    RecentStateNoteInput,
+    RecentStateNoteRead,
     UserOnboardingInput,
     UserProfileRead,
 )
@@ -90,6 +95,50 @@ def create_app() -> FastAPI:
                 filename=file.filename or "chatgpt-export.zip",
                 file_bytes=await file.read(),
             )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/profiles/{user_id}/signals", response_model=list[ProfileSignalRead])
+    def get_profile_signals(user_id: str, session: Session = Depends(get_session)):
+        try:
+            return ProfileService(session).get_profile_signals(user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.post("/profiles/{user_id}/signals/{signal_id}/review", response_model=ProfileSignalReviewResponse)
+    def review_profile_signal(
+        user_id: str,
+        signal_id: str,
+        payload: ProfileSignalReviewInput,
+        session: Session = Depends(get_session),
+    ):
+        try:
+            return ProfileService(session).review_profile_signal(user_id, signal_id, payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/profiles/{user_id}/recent-state", response_model=list[RecentStateNoteRead])
+    def get_recent_state_notes(user_id: str, session: Session = Depends(get_session)):
+        try:
+            return ProfileService(session).list_recent_state_notes(user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.post("/profiles/{user_id}/recent-state", response_model=RecentStateNoteRead)
+    def create_recent_state_note(
+        user_id: str,
+        payload: RecentStateNoteInput,
+        session: Session = Depends(get_session),
+    ):
+        try:
+            return ProfileService(session).add_recent_state_note(user_id, payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.delete("/profiles/{user_id}/recent-state/{note_id}")
+    def delete_recent_state_note(user_id: str, note_id: str, session: Session = Depends(get_session)):
+        try:
+            return ProfileService(session).delete_recent_state_note(user_id, note_id)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

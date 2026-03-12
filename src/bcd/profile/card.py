@@ -19,6 +19,8 @@ class ProfileCardRenderer:
             "",
             f"- User ID: `{profile.user_id}`",
             f"- Profile summary: {profile.profile_summary}",
+            f"- Stable signal count: {profile.signal_count}",
+            f"- Pending signal review count: {profile.pending_signal_count}",
             "",
             "## Stable signals",
         ]
@@ -51,6 +53,7 @@ class ProfileCardRenderer:
         self,
         profile: UserProfileRead,
         recent_memories: list[dict],
+        manual_recent_notes: list[str] | None = None,
     ) -> str:
         lines = [
             f"# Recent State Card: {profile.display_name}",
@@ -73,6 +76,11 @@ class ProfileCardRenderer:
             if profile.latest_snapshot.drift_markers:
                 lines.append(f"- Drift markers: {'; '.join(profile.latest_snapshot.drift_markers)}")
 
+        if manual_recent_notes:
+            lines.extend(["", "## Manual recent-state notes"])
+            for note in manual_recent_notes[:5]:
+                lines.append(f"- {note}")
+
         if recent_memories:
             lines.extend(["", "## Representative recent memories"])
             for memory in recent_memories[:5]:
@@ -93,9 +101,10 @@ class ProfileCardRenderer:
         self,
         profile: UserProfileRead,
         recent_memories: list[dict],
+        manual_recent_notes: list[str] | None = None,
     ) -> tuple[str, str, str]:
         stable = self.render_stable(profile)
-        recent = self.render_recent_state(profile, recent_memories)
+        recent = self.render_recent_state(profile, recent_memories, manual_recent_notes=manual_recent_notes)
         combined = f"{stable}\n{recent}"
         return stable, recent, combined
 
