@@ -1,10 +1,11 @@
 from math import isclose
 
 from bcd.config import get_settings
-from bcd.decision.schemas import DecisionOptionInput, DecisionPredictionInput
+from bcd.decision.schemas import DecisionOptionInput, DecisionPredictionInput, FeedbackInput
 from bcd.decision.service import DecisionService
 from bcd.profile.schemas import RecentStateNoteInput
 from bcd.profile.service import ProfileService
+from bcd.reflection.service import ReflectionService
 from bcd.storage.database import init_db, session_scope
 
 
@@ -32,6 +33,7 @@ def test_predict_returns_valid_option_and_normalized_confidence(configured_env):
     assert prediction.predicted_option_id in {item.option_id for item in prediction.ranked_options}
     assert isclose(sum(confidences), 1.0, rel_tol=1e-4, abs_tol=1e-4)
     assert prediction.explanation_sections.top_choice_summary
+    assert prediction.decision_audit.confidence_label
     assert prediction.ranked_options[0].component_scores
     assert prediction.ranked_options[0].supporting_evidence
 
@@ -77,4 +79,56 @@ def test_recent_state_note_can_shift_the_top_prediction(configured_env):
     assert any(
         component.name == "recent_state_influence" and component.weighted_score > 0
         for component in shifted_prediction.ranked_options[0].component_scores
+    )
+
+
+def test_feedback_context_updates_carry_into_the_next_prediction(configured_env):
+    settings = get_settings()
+    init_db(settings)
+
+    with session_scope(settings.database_url) as session:
+        ProfileService(session, settings).bootstrap_sample_profile()
+        decision_service = DecisionService(session, settings)
+        reflection_service = ReflectionService(session)
+
+        first_prediction = decision_service.predict(
+            DecisionPredictionInput(
+                user_id="sample-alex",
+                prompt="Choose a study plan for a deadline tonight.",
+                category="study",
+                context={"urgency": "high"},
+                options=[
+                    DecisionOptionInput(option_text="Structured checklist sprint"),
+                    DecisionOptionInput(option_text="Open-ended exploration"),
+                ],
+            )
+        )
+        reflection_service.record_feedback(
+            first_prediction.request_id,
+            FeedbackInput(
+                actual_option_id=first_prediction.ranked_options[0].option_id,
+                reason_text="Needed the most realistic option for a deadline tonight.",
+                reason_tags=["urgent", "structured"],
+                context_updates={"deadline": "tonight", "energy": "very_low"},
+                preference_shift_note="Urgency is dominating curiosity right now.",
+            ),
+        )
+        next_prediction = decision_service.predict(
+            DecisionPredictionInput(
+                user_id="sample-alex",
+                prompt="Choose another study approach.",
+                category="study",
+                context={"urgency": "high"},
+                options=[
+                    DecisionOptionInput(option_text="Structured checklist sprint"),
+                    DecisionOptionInput(option_text="Long open-ended exploration"),
+                ],
+            )
+        )
+
+    assert next_prediction.decision_audit.active_context["deadline"] == "tonight"
+    assert next_prediction.decision_audit.adaptation_signals
+    assert any(
+        component.name == "adaptive_context_alignment"
+        for component in next_prediction.ranked_options[0].component_scores
     )

@@ -45,12 +45,14 @@ class ReflectionService:
             chosen_option_text=chosen_option.option_text,
             context=request.context_json,
             reason_text=payload.reason_text,
+            context_updates=payload.context_updates,
         )
         tags = list(
             dict.fromkeys(
                 payload.reason_tags
                 + tokenize(chosen_option.option_text)
                 + extract_context_tags(request.context_json)
+                + tokenize(flatten_to_text(payload.context_updates))
             )
         )
         memory = self.repository.add(
@@ -172,10 +174,13 @@ class ReflectionService:
         chosen_option_text: str,
         context: dict,
         reason_text: str | None,
+        context_updates: dict,
     ) -> str:
         pieces = [f"For {category}, the user chose '{chosen_option_text}' after '{prompt}'."]
         if context:
             pieces.append(f"Context: {flatten_to_text(context)}.")
         if reason_text:
             pieces.append(f"Reason: {reason_text}")
+        if context_updates:
+            pieces.append(f"Feedback update: {flatten_to_text(context_updates)}.")
         return " ".join(pieces)

@@ -101,7 +101,8 @@ button,
 .metric-strip,
 .grid-2,
 .grid-3,
-.component-grid {
+.component-grid,
+.audit-grid {
   display: grid;
   gap: 22px;
 }
@@ -121,7 +122,8 @@ button,
 
 .split-cards,
 .grid-2,
-.component-grid {
+.component-grid,
+.audit-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -311,6 +313,7 @@ p,
 .metric,
 .soft-block,
 .component-chip,
+.audit-card,
 .list-card,
 .status,
 .empty-state {
@@ -476,6 +479,10 @@ button:hover,
   border-radius: 16px;
   background: var(--surface);
   border: 1px solid var(--line);
+}
+
+.audit-card {
+  background: var(--surface);
 }
 
 .checkbox-row {

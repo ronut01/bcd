@@ -10,6 +10,7 @@ from sqlmodel import Session
 
 from bcd.config import Settings, get_settings
 from bcd.decision.schemas import (
+    DecisionAudit,
     DecisionPredictionInput,
     ExplanationSections,
     LLMRuntimeConfig,
@@ -91,6 +92,11 @@ class DecisionService:
         profile_card_payload = self.profile_service.get_profile_card(payload.user_id)
         profile_signals = self.profile_service.get_profile_signals(payload.user_id)
         recent_state_payload = self.profile_service.get_recent_state_payload(payload.user_id)
+        effective_context = self._build_effective_context(
+            request_context=payload.context,
+            recent_state_payload=recent_state_payload,
+            snapshot=snapshot,
+        )
 
         scoring_context = ScoringContext(
             category=payload.category,
@@ -101,6 +107,7 @@ class DecisionService:
             snapshot=snapshot,
             recent_state_notes=recent_state_payload["combined_notes"],
             retrieved_memories=retrieved_memories,
+            effective_context=effective_context,
         )
         heuristic_scored = [
             self.scoring_pipeline.score_option(scoring_context=scoring_context, option=option)
@@ -132,6 +139,12 @@ class DecisionService:
             retrieved_memories=retrieved_memories,
             recent_state_payload=recent_state_payload,
             llm_note=llm_result.explanation if llm_result else llm_error,
+        )
+        decision_audit = self._build_decision_audit(
+            ranked=ranked,
+            recent_state_payload=recent_state_payload,
+            retrieved_memories=retrieved_memories,
+            effective_context=effective_context,
         )
         top = ranked[0]
         explanation = explanation_sections.top_choice_summary
@@ -192,6 +205,7 @@ class DecisionService:
             ],
             retrieved_memories=retrieved_memories,
             explanation_sections=explanation_sections,
+            decision_audit=decision_audit,
             created_at=prediction.created_at,
         )
 
@@ -404,6 +418,9 @@ class DecisionService:
                 )
         if llm_note:
             losing_reasons.append(f"LLM note: {llm_note}")
+        adaptation_notes = recent_state_payload.get("adaptation_signals", [])[:2]
+        if adaptation_notes:
+            losing_reasons.extend(adaptation_notes)
 
         return ExplanationSections(
             top_choice_summary=(
@@ -412,6 +429,67 @@ class DecisionService:
             ),
             why_this_option=top.scored_option.supporting_evidence[:4] or [top.scored_option.reason_summary],
             what_memories_mattered=memory_evidence or ["No strong retrieved memory dominated this prediction."],
-            what_recent_state_mattered=recent_notes or ["No recent-state note or short-term drift marker strongly changed the result."],
+            what_recent_state_mattered=(
+                recent_notes + recent_state_payload.get("adaptation_signals", [])[:2]
+            )[:4]
+            or ["No recent-state note or short-term drift marker strongly changed the result."],
             why_other_options_lost=losing_reasons[:4],
+        )
+
+    @staticmethod
+    def _build_effective_context(
+        request_context: dict,
+        recent_state_payload: dict,
+        snapshot: PreferenceSnapshotRead | None,
+    ) -> dict:
+        effective_context = dict(request_context)
+        if snapshot is None:
+            return effective_context
+        active_overrides = snapshot.derived_statistics.get("active_context_overrides", {})
+        for key, value in active_overrides.items():
+            effective_context.setdefault(key, value)
+        return effective_context
+
+    @staticmethod
+    def _build_decision_audit(
+        ranked: list[_ResolvedOptionScore],
+        recent_state_payload: dict,
+        retrieved_memories,
+        effective_context: dict,
+    ) -> DecisionAudit:
+        top = ranked[0]
+        runner_up = ranked[1] if len(ranked) > 1 else None
+        margin = round(top.confidence - runner_up.confidence, 4) if runner_up else round(top.confidence, 4)
+        confidence_label = "high" if margin >= 0.3 else "medium" if margin >= 0.12 else "fragile"
+        decisive_factors = list(
+            dict.fromkeys(
+                top.scored_option.supporting_evidence
+                + [component.reason for component in top.scored_option.component_scores if component.weighted_score > 0]
+            )
+        )[:4]
+        watchouts = top.scored_option.counter_evidence[:2]
+        if runner_up:
+            watchouts.extend(runner_up.scored_option.supporting_evidence[:2])
+        if not watchouts:
+            watchouts.append("No single counter-signal strongly challenged the winning option.")
+
+        adaptation_signals = list(
+            dict.fromkeys(
+                recent_state_payload.get("adaptation_signals", [])
+                + recent_state_payload.get("feedback_shift_notes", [])
+                + [
+                    f"Retrieved memory emphasis: {memory.chosen_option_text}"
+                    for memory in retrieved_memories[:2]
+                    if memory.memory_role in {"direct_match", "recent_repeat"}
+                ]
+            )
+        )[:4]
+
+        return DecisionAudit(
+            confidence_label=confidence_label,
+            margin_vs_runner_up=margin,
+            decisive_factors=decisive_factors or [top.scored_option.reason_summary],
+            watchouts=watchouts[:4],
+            adaptation_signals=adaptation_signals,
+            active_context=effective_context,
         )

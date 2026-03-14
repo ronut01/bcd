@@ -14,6 +14,7 @@ from bcd.utils.text import flatten_to_text, overlap_count, tokenize
 LOW_ENERGY_PENALTIES = {"complex", "late", "adventure", "exploration", "long", "heavy"}
 RAINY_WEATHER_PENALTIES = {"outdoor", "walk", "picnic", "street", "park"}
 LOW_BUDGET_PENALTIES = {"premium", "luxury", "expensive", "exclusive"}
+HIGH_URGENCY_BONUSES = {"quick", "easy", "simple", "structured", "checklist", "fast", "near", "familiar"}
 TEMPORARY_OVERRIDE_TERMS = {"today", "currently", "right", "now", "this", "time", "for", "now"}
 NEGATION_TERMS = {"avoid", "not", "dont", "don't", "skip", "no"}
 
@@ -30,6 +31,7 @@ class ScoringContext:
     snapshot: PreferenceSnapshotRead | None
     recent_state_notes: list[str]
     retrieved_memories: list[RetrievedMemory]
+    effective_context: dict
 
 
 @dataclass(slots=True)
@@ -334,6 +336,87 @@ class RecentTrendInfluenceComponent:
         )
 
 
+class AdaptiveContextAlignmentComponent:
+    name = "adaptive_context_alignment"
+    weight = 1.0
+
+    def score(self, scoring_context: ScoringContext, option: DecisionOption) -> ComponentScore:
+        if scoring_context.snapshot is None:
+            return _component_result(
+                name=self.name,
+                raw_score=0.0,
+                weight=self.weight,
+                reason="No adaptive context overrides were available.",
+                supporting=[],
+                counter=[],
+            )
+
+        option_tokens = _option_tokens(option)
+        derived = scoring_context.snapshot.derived_statistics
+        active_overrides = derived.get("active_context_overrides", {})
+        if not active_overrides:
+            return _component_result(
+                name=self.name,
+                raw_score=0.0,
+                weight=self.weight,
+                reason="No recent feedback context override is active.",
+                supporting=[],
+                counter=[],
+            )
+
+        raw_score = 0.0
+        supporting = []
+        counter = []
+
+        energy_value = str(scoring_context.effective_context.get("energy", "")).lower()
+        budget_value = str(scoring_context.effective_context.get("budget", "")).lower()
+        weather_value = str(scoring_context.effective_context.get("weather", "")).lower()
+        urgency_value = str(scoring_context.effective_context.get("urgency", "")).lower()
+        deadline_value = str(scoring_context.effective_context.get("deadline", "")).lower()
+
+        if energy_value in {"low", "very_low"}:
+            penalty = overlap_count(option_tokens, LOW_ENERGY_PENALTIES) * 0.45
+            raw_score -= penalty
+            if penalty:
+                counter.append("Recent feedback says low energy is still active, so high-friction options lose support.")
+
+        if budget_value in {"low", "tight"}:
+            penalty = overlap_count(option_tokens, LOW_BUDGET_PENALTIES) * 0.4
+            raw_score -= penalty
+            if penalty:
+                counter.append("Recent feedback reinforces budget sensitivity.")
+
+        if weather_value == "rainy":
+            penalty = overlap_count(option_tokens, RAINY_WEATHER_PENALTIES) * 0.35
+            raw_score -= penalty
+            if penalty:
+                counter.append("Recent feedback keeps rainy-condition friction active.")
+
+        if urgency_value in {"high", "urgent"} or deadline_value in {"tonight", "soon", "immediate"}:
+            bonus = overlap_count(option_tokens, HIGH_URGENCY_BONUSES) * 0.55
+            raw_score += bonus
+            if bonus:
+                supporting.append("Recent feedback says urgency is active, so low-friction realistic options gain support.")
+
+        for key, value in active_overrides.items():
+            if key not in scoring_context.context:
+                supporting.append(f"Using recent feedback carry-over: {key}={value}.")
+
+        reason = (
+            "Recent feedback-derived context overrides changed this option's score."
+            if raw_score
+            else "Recent adaptive context did not materially change this option."
+        )
+        return _component_result(
+            name=self.name,
+            raw_score=raw_score,
+            weight=self.weight,
+            reason=reason,
+            supporting=supporting[:3],
+            counter=counter[:3],
+        )
+
+
 def default_scoring_pipeline() -> ScoringPipeline:
     """Return the default deterministic scoring pipeline."""
 
@@ -344,6 +427,7 @@ def default_scoring_pipeline() -> ScoringPipeline:
             ContextCompatibilityComponent(),
             RecentStateInfluenceComponent(),
             RecentTrendInfluenceComponent(),
+            AdaptiveContextAlignmentComponent(),
         ]
     )
 

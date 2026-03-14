@@ -734,6 +734,14 @@
     renderEvidenceList("recent-state-evidence", prediction.explanation_sections.what_recent_state_mattered, "No recent-state evidence was returned.");
     renderEvidenceList("memory-explanation-list", prediction.explanation_sections.what_memories_mattered, "No memory explanation was returned.");
     renderEvidenceList("why-others-lost-list", prediction.explanation_sections.why_other_options_lost, "No comparison evidence was returned.");
+    $("audit-confidence-label").textContent = prediction.decision_audit.confidence_label;
+    $("audit-margin").textContent = `margin vs runner-up: ${Math.round(prediction.decision_audit.margin_vs_runner_up * 100)} pts`;
+    $("audit-context").textContent = Object.entries(prediction.decision_audit.active_context || {})
+      .map(([key, value]) => `${key}=${value}`)
+      .join(" | ") || "No active context";
+    renderEvidenceList("audit-decisive-factors", prediction.decision_audit.decisive_factors, "No decisive factors were captured.");
+    renderEvidenceList("audit-watchouts", prediction.decision_audit.watchouts, "No specific watchouts were captured.");
+    renderEvidenceList("audit-adaptation-signals", prediction.decision_audit.adaptation_signals, "No adaptation signals were active.");
 
     const rankList = $("rank-list");
     rankList.innerHTML = "";

@@ -547,14 +547,32 @@ class ProfileService:
         snapshot_notes = snapshot.short_term_preference_notes_json if snapshot else []
         drift_markers = snapshot.drift_markers_json if snapshot else []
         feedback_shift_notes = []
+        recent_failure_reasons: list[str] = []
+        active_context_overrides: dict[str, str] = {}
         if snapshot:
             feedback_shift_notes = snapshot.derived_statistics_json.get("recent_shift_notes", [])
+            active_context_overrides = snapshot.derived_statistics_json.get("active_context_overrides", {})
+            recent_failure_reasons = [
+                f"Recent miss pattern: {reason.replace('_', ' ')}"
+                for reason, count in snapshot.derived_statistics_json.get("recent_failure_reasons", {}).items()
+                if count > 0
+            ]
+        adaptation_signals = list(
+            dict.fromkeys(
+                [f"Carry-over context: {key}={value}" for key, value in active_context_overrides.items()]
+                + recent_failure_reasons
+            )
+        )
         return {
             "manual_notes": manual_notes,
             "snapshot_notes": snapshot_notes,
             "drift_markers": drift_markers,
             "feedback_shift_notes": feedback_shift_notes,
-            "combined_notes": list(dict.fromkeys(manual_notes + snapshot_notes + feedback_shift_notes)),
+            "adaptation_signals": adaptation_signals,
+            "active_context_overrides": active_context_overrides,
+            "combined_notes": list(
+                dict.fromkeys(manual_notes + snapshot_notes + feedback_shift_notes + adaptation_signals)
+            ),
         }
 
     def _profile_card_path(self, user_id: str):
@@ -863,6 +881,8 @@ class ProfileService:
         all_tag_counts: dict[str, int] = {}
         recent_shift_notes: list[str] = []
         recent_failure_reasons: dict[str, int] = {}
+        recent_context_updates: dict[str, dict[str, int]] = {}
+        active_context_overrides: dict[str, str] = {}
 
         for memory in memories:
             category_counts[memory.category] = category_counts.get(memory.category, 0) + 1
@@ -874,6 +894,16 @@ class ProfileService:
                 recent_shift_notes.append(reflection.preference_shift_note)
             for reason in reflection.failure_reasons_json:
                 recent_failure_reasons[reason] = recent_failure_reasons.get(reason, 0) + 1
+            for key, value in reflection.context_updates_json.items():
+                normalized_key = str(key).strip()
+                normalized_value = str(value).strip()
+                if not normalized_key or not normalized_value:
+                    continue
+                recent_context_updates.setdefault(normalized_key, {})
+                recent_context_updates[normalized_key][normalized_value] = (
+                    recent_context_updates[normalized_key].get(normalized_value, 0) + 1
+                )
+                active_context_overrides[normalized_key] = normalized_value
 
         for memory in recent_memories:
             recent_option_counts.setdefault(memory.category, {})
@@ -895,6 +925,8 @@ class ProfileService:
             )
         if recent_shift_notes:
             drift_markers.append("Recent feedback suggests at least one temporary preference shift is active.")
+        if active_context_overrides:
+            drift_markers.append("Recent feedback supplied context overrides that should still influence near-term decisions.")
 
         summary_parts = [
             f"Recent decisions show the strongest activity in {max(category_counts, key=category_counts.get)}.",
@@ -903,13 +935,17 @@ class ProfileService:
             summary_parts.append(f"Short-term signals currently emphasize {', '.join(top_recent_tags[:3])}.")
         if recent_shift_notes:
             summary_parts.append("Feedback-derived shift markers are influencing the short-term state.")
+        if active_context_overrides:
+            override_summary = ", ".join(f"{key}={value}" for key, value in list(active_context_overrides.items())[:3])
+            summary_parts.append(f"Recent feedback carry-over is active for {override_summary}.")
 
         return PreferenceSnapshot(
             user_id=user_id,
             summary=" ".join(summary_parts),
             short_term_preference_notes_json=[
                 f"Recent choices repeatedly include '{tag}'." for tag in top_recent_tags[:3]
-            ] + [f"Recent feedback shift: {note}" for note in recent_shift_notes[:2]],
+            ] + [f"Recent feedback shift: {note}" for note in recent_shift_notes[:2]]
+            + [f"Active context override: {key}={value}." for key, value in list(active_context_overrides.items())[:2]],
             drift_markers_json=drift_markers,
             derived_statistics_json={
                 "category_counts": category_counts,
@@ -917,5 +953,7 @@ class ProfileService:
                 "recent_tags": top_recent_tags,
                 "recent_shift_notes": recent_shift_notes[:5],
                 "recent_failure_reasons": recent_failure_reasons,
+                "recent_context_updates": recent_context_updates,
+                "active_context_overrides": active_context_overrides,
             },
         )

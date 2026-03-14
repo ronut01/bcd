@@ -81,6 +81,7 @@ def test_api_happy_path(configured_env):
     assert prediction_response.status_code == 200
     prediction_payload = prediction_response.json()
     assert prediction_payload["explanation_sections"]["top_choice_summary"]
+    assert prediction_payload["decision_audit"]["confidence_label"]
     assert prediction_payload["ranked_options"][0]["component_scores"]
     assert "why_retrieved" in prediction_payload["retrieved_memories"][0]
 

@@ -26,6 +26,15 @@ class ExplanationSections(BaseModel):
     why_other_options_lost: list[str] = Field(default_factory=list)
 
 
+class DecisionAudit(BaseModel):
+    confidence_label: str
+    margin_vs_runner_up: float = 0.0
+    decisive_factors: list[str] = Field(default_factory=list)
+    watchouts: list[str] = Field(default_factory=list)
+    adaptation_signals: list[str] = Field(default_factory=list)
+    active_context: dict = Field(default_factory=dict)
+
+
 class LLMRuntimeConfig(BaseModel):
     api_key: str
     base_url: str = "https://api.openai.com/v1"
@@ -82,6 +91,7 @@ class PredictionResponse(BaseModel):
     ranked_options: list[RankedOption]
     retrieved_memories: list[RetrievedMemory] = Field(default_factory=list)
     explanation_sections: ExplanationSections
+    decision_audit: DecisionAudit
     created_at: datetime
 
 
