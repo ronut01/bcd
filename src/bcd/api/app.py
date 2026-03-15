@@ -10,7 +10,13 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlmodel import Session
 
 from bcd.config import Settings, get_settings
-from bcd.decision.schemas import DecisionPredictionInput, FeedbackInput, PredictionResponse
+from bcd.decision.schemas import (
+    DecisionOptionSuggestionInput,
+    DecisionPredictionInput,
+    FeedbackInput,
+    OptionSuggestionResponse,
+    PredictionResponse,
+)
 from bcd.decision.service import DecisionService
 from bcd.profile.schemas import (
     ChatGPTImportResponse,
@@ -204,6 +210,13 @@ def create_app() -> FastAPI:
             return DecisionService(session).predict(payload)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @app.post("/decisions/suggest-options", response_model=OptionSuggestionResponse)
+    def suggest_options(payload: DecisionOptionSuggestionInput, session: Session = Depends(get_session)):
+        try:
+            return DecisionService(session).suggest_options(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/decisions/{request_id}/feedback")
     def record_feedback(request_id: str, payload: FeedbackInput, session: Session = Depends(get_session)):

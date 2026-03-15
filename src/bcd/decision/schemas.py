@@ -64,6 +64,22 @@ class DecisionPredictionInput(BaseModel):
         return value
 
 
+class DecisionOptionSuggestionInput(BaseModel):
+    user_id: str
+    prompt: str
+    category: str
+    context: dict = Field(default_factory=dict)
+    existing_options: list[str] = Field(default_factory=list)
+    max_suggestions: int = 4
+
+    @field_validator("max_suggestions")
+    @classmethod
+    def validate_max_suggestions(cls, value: int) -> int:
+        if value < 1 or value > 5:
+            raise ValueError("Option suggestions must request between 1 and 5 items.")
+        return value
+
+
 class RankedOption(BaseModel):
     option_id: str
     option_text: str
@@ -93,6 +109,20 @@ class PredictionResponse(BaseModel):
     explanation_sections: ExplanationSections
     decision_audit: DecisionAudit
     created_at: datetime
+
+
+class SuggestedOption(BaseModel):
+    option_text: str
+    confidence: float
+    rationale: str
+    source_labels: list[str] = Field(default_factory=list)
+    supporting_evidence: list[str] = Field(default_factory=list)
+
+
+class OptionSuggestionResponse(BaseModel):
+    strategy: str
+    active_context: dict = Field(default_factory=dict)
+    suggestions: list[SuggestedOption] = Field(default_factory=list)
 
 
 class FeedbackInput(BaseModel):

@@ -1,7 +1,7 @@
 from math import isclose
 
 from bcd.config import get_settings
-from bcd.decision.schemas import DecisionOptionInput, DecisionPredictionInput, FeedbackInput
+from bcd.decision.schemas import DecisionOptionInput, DecisionOptionSuggestionInput, DecisionPredictionInput, FeedbackInput
 from bcd.decision.service import DecisionService
 from bcd.profile.schemas import RecentStateNoteInput
 from bcd.profile.service import ProfileService
@@ -227,3 +227,57 @@ def test_time_of_day_now_uses_profile_context_preferences(configured_env):
         component.name == "context_compatibility" and component.weighted_score > 0
         for component in prediction.ranked_options[0].component_scores
     )
+
+
+def test_suggest_options_returns_personalized_candidates_without_duplicates(configured_env):
+    settings = get_settings()
+    init_db(settings)
+
+    with session_scope(settings.database_url) as session:
+        ProfileService(session, settings).bootstrap_sample_profile()
+        suggestions = DecisionService(session, settings).suggest_options(
+            DecisionOptionSuggestionInput(
+                user_id="sample-alex",
+                prompt="Pick dinner after a tiring rainy evening.",
+                category="food",
+                context={"energy": "low", "weather": "rainy", "time_of_day": "night"},
+                existing_options=["Greasy burger"],
+                max_suggestions=4,
+            )
+        )
+
+    assert suggestions.suggestions
+    assert all(item.option_text.lower() != "greasy burger" for item in suggestions.suggestions)
+    assert any(label in {"stable profile", "current context", "memory match"} for label in suggestions.suggestions[0].source_labels)
+    assert suggestions.suggestions[0].rationale
+
+
+def test_suggest_options_tracks_the_current_prompt_not_the_previous_one(configured_env):
+    settings = get_settings()
+    init_db(settings)
+
+    with session_scope(settings.database_url) as session:
+        ProfileService(session, settings).bootstrap_sample_profile()
+        decision_service = DecisionService(session, settings)
+
+        dinner_suggestions = decision_service.suggest_options(
+            DecisionOptionSuggestionInput(
+                user_id="sample-alex",
+                prompt="Pick dinner after a tiring rainy evening.",
+                category="food",
+                context={"energy": "low", "weather": "rainy", "time_of_day": "night"},
+                max_suggestions=4,
+            )
+        )
+        lunch_suggestions = decision_service.suggest_options(
+            DecisionOptionSuggestionInput(
+                user_id="sample-alex",
+                prompt="Choose lunch for a bright sunny workday.",
+                category="food",
+                context={"weather": "sunny", "time_of_day": "morning"},
+                max_suggestions=4,
+            )
+        )
+
+    assert dinner_suggestions.suggestions[0].option_text != lunch_suggestions.suggestions[0].option_text
+    assert lunch_suggestions.suggestions[0].option_text == "Fresh salad bowl"

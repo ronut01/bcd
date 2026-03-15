@@ -84,6 +84,20 @@ def test_api_happy_path(configured_env):
     assert prediction_payload["decision_audit"]["confidence_label"]
     assert prediction_payload["ranked_options"][0]["component_scores"]
     assert "why_retrieved" in prediction_payload["retrieved_memories"][0]
+    suggestion_response = client.post(
+        "/decisions/suggest-options",
+        json={
+            "user_id": user_id,
+            "prompt": "Pick dinner after a tiring rainy evening.",
+            "category": "food",
+            "context": {"energy": "low", "weather": "rainy", "time_of_day": "night"},
+            "existing_options": ["Greasy burger"],
+            "max_suggestions": 4,
+        },
+    )
+    assert suggestion_response.status_code == 200
+    assert len(suggestion_response.json()["suggestions"]) >= 1
+    assert all(item["option_text"].lower() != "greasy burger" for item in suggestion_response.json()["suggestions"])
 
     feedback_response = client.post(
         f"/decisions/{prediction_payload['request_id']}/feedback",

@@ -14,6 +14,7 @@
   const page = document.body.dataset.page;
   let onboardingQuestionnaire = null;
   let latestPrediction = null;
+  let optionSuggestions = [];
   const setupState = {
     step: getActiveUserId() ? 3 : 1,
     source: null,
@@ -604,23 +605,129 @@
       .filter(Boolean);
   }
 
+  function getCurrentOptionTexts() {
+    return Array.from($("option-list").querySelectorAll("input"))
+      .map((input) => input.value.trim())
+      .filter(Boolean);
+  }
+
+  function hasOptionText(optionText) {
+    return getCurrentOptionTexts().some((value) => value.toLowerCase() === optionText.trim().toLowerCase());
+  }
+
+  function canAddMoreOptions() {
+    const optionList = $("option-list");
+    return optionList ? optionList.children.length < 5 : false;
+  }
+
   function createOptionRow(value = "") {
     const optionList = $("option-list");
     if (!optionList) return;
+    if (optionList.children.length >= 5) {
+      setStatus("You can compare up to five options at once.", true);
+      return null;
+    }
     const row = document.createElement("div");
     row.className = "option-row";
     row.innerHTML = `
       <input type="text" value="${escapeAttribute(value)}" placeholder="Candidate option" />
       <button class="danger" type="button">Remove</button>
     `;
+    row.querySelector("input").addEventListener("input", syncOptionSuggestionButtons);
     row.querySelector("button").addEventListener("click", () => {
       if (optionList.children.length > 2) {
         row.remove();
+        syncOptionSuggestionButtons();
       } else {
         setStatus("At least two options are required.", true);
       }
     });
     optionList.appendChild(row);
+    syncOptionSuggestionButtons();
+    return row;
+  }
+
+  function clearOptionSuggestions() {
+    optionSuggestions = [];
+    const panel = $("option-suggestion-panel");
+    const list = $("option-suggestion-list");
+    if (panel) {
+      panel.classList.add("hidden");
+    }
+    if (list) {
+      list.innerHTML = "";
+    }
+  }
+
+  function syncOptionSuggestionButtons() {
+    const addAllButton = $("add-suggestions-button");
+    if (addAllButton) {
+      const availableCount = optionSuggestions.filter((item) => !hasOptionText(item.option_text)).length;
+      addAllButton.disabled = !optionSuggestions.length || availableCount === 0 || !canAddMoreOptions();
+      addAllButton.textContent = availableCount > 0 ? "Add top suggestions" : "All added";
+    }
+    document.querySelectorAll("[data-suggestion-option]").forEach((button) => {
+      const optionText = button.dataset.suggestionOption || "";
+      const alreadyAdded = hasOptionText(optionText);
+      button.disabled = alreadyAdded || !canAddMoreOptions();
+      button.textContent = alreadyAdded ? "Added" : "Add";
+    });
+  }
+
+  function addSuggestedOption(optionText) {
+    if (hasOptionText(optionText)) {
+      syncOptionSuggestionButtons();
+      return false;
+    }
+    const row = createOptionRow(optionText);
+    syncOptionSuggestionButtons();
+    return Boolean(row);
+  }
+
+  function renderOptionSuggestions(payload) {
+    optionSuggestions = payload.suggestions || [];
+    const panel = $("option-suggestion-panel");
+    const list = $("option-suggestion-list");
+    const summary = $("option-suggestion-summary");
+    if (!panel || !list || !summary) return;
+    list.innerHTML = "";
+    summary.textContent = Object.keys(payload.active_context || {}).length
+      ? `Generated from the active profile plus context: ${Object.entries(payload.active_context)
+        .map(([key, value]) => `${key}=${value}`)
+        .join(" | ")}`
+      : "Generated from the active profile, recent state, and relevant memories.";
+
+    optionSuggestions.forEach((suggestion) => {
+      const card = document.createElement("div");
+      card.className = "suggestion-card";
+      const chips = (suggestion.source_labels || [])
+        .map((label) => `<span class="chip">${escapeHtml(label)}</span>`)
+        .join("");
+      const evidence = (suggestion.supporting_evidence || [])
+        .slice(0, 2)
+        .map((item) => `<div class="mini">${escapeHtml(item)}</div>`)
+        .join("");
+      card.innerHTML = `
+        <div class="suggestion-card-header">
+          <div>
+            <strong>${escapeHtml(suggestion.option_text)}</strong>
+            <div class="mini">fit score: ${Math.round((suggestion.confidence || 0) * 100)}%</div>
+          </div>
+          <button class="secondary" type="button" data-suggestion-option="${escapeAttribute(suggestion.option_text)}">Add</button>
+        </div>
+        <div class="chip-row">${chips}</div>
+        <div class="mini">${escapeHtml(suggestion.rationale)}</div>
+        ${evidence}
+      `;
+      card.querySelector("button").addEventListener("click", () => {
+        if (addSuggestedOption(suggestion.option_text)) {
+          setStatus(`Added suggested option '${suggestion.option_text}'.`);
+        }
+      });
+      list.appendChild(card);
+    });
+    panel.classList.toggle("hidden", !optionSuggestions.length);
+    syncOptionSuggestionButtons();
   }
 
   function renderFailureReasonOptions() {
@@ -690,6 +797,16 @@
     return parsed;
   }
 
+  function prepareForNextPrediction() {
+    latestPrediction = null;
+    resetFeedbackState({ clearFields: true });
+    $("feedback-panel").classList.add("hidden");
+    $("prediction-empty").classList.remove("hidden");
+    $("prediction-content").classList.add("hidden");
+    $("metric-confidence").textContent = "-";
+    closePredictionModal();
+  }
+
   function resetPredictionForm() {
     if (page !== "predict") return;
     $("user-id").value = getActiveUserId();
@@ -706,15 +823,11 @@
     $("budget").value = "";
     $("urgency").value = "";
     $("prediction-mode").value = "hybrid";
-    resetFeedbackState({ clearFields: true });
     $("option-list").innerHTML = "";
     DEFAULT_OPTIONS.forEach(createOptionRow);
-    $("feedback-panel").classList.add("hidden");
-    closePredictionModal();
-    $("prediction-empty").classList.remove("hidden");
-    $("prediction-content").classList.add("hidden");
-    latestPrediction = null;
+    clearOptionSuggestions();
     $("metric-mode").textContent = "hybrid";
+    prepareForNextPrediction();
   }
 
   function getContextPayload() {
@@ -1152,11 +1265,65 @@
     loadSavedLlmSettings();
     wireLlmButtons();
     resetPredictionForm();
-    $("add-option-button").addEventListener("click", () => createOptionRow(""));
+    $("add-option-button").addEventListener("click", () => {
+      if (createOptionRow("")) {
+        setStatus("Added another option slot.");
+      }
+    });
     $("reset-button").addEventListener("click", resetPredictionForm);
     $("close-prediction-button").addEventListener("click", closePredictionModal);
     $("edit-prediction-button").addEventListener("click", closePredictionModal);
     $("prediction-modal-backdrop").addEventListener("click", closePredictionModal);
+    $("suggest-options-button").addEventListener("click", async () => {
+      try {
+        const payload = {
+          user_id: $("user-id").value.trim(),
+          prompt: $("prompt").value.trim(),
+          category: $("category").value.trim(),
+          context: getContextPayload(),
+          existing_options: getCurrentOptionTexts(),
+          max_suggestions: 4,
+        };
+        if (!payload.user_id) {
+          setStatus("Load a user before requesting suggested options.", true);
+          return;
+        }
+        if (!payload.prompt) {
+          setStatus("Enter a question before requesting suggested options.", true);
+          return;
+        }
+        setStatus("Generating personalized option suggestions...");
+        const response = await request("/decisions/suggest-options", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        renderOptionSuggestions(response);
+        setStatus("Suggested options are ready. Add the ones that feel realistic for this user.");
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    });
+    $("add-suggestions-button").addEventListener("click", () => {
+      let addedCount = 0;
+      optionSuggestions.forEach((suggestion) => {
+        if (!canAddMoreOptions()) return;
+        if (addSuggestedOption(suggestion.option_text)) {
+          addedCount += 1;
+        }
+      });
+      if (addedCount) {
+        setStatus(`Added ${addedCount} suggested option${addedCount === 1 ? "" : "s"}.`);
+      }
+      syncOptionSuggestionButtons();
+    });
+    $("clear-suggestions-button").addEventListener("click", () => {
+      clearOptionSuggestions();
+      setStatus("Cleared suggested options.");
+    });
+    ["prompt", "category", "time_of_day", "energy", "weather", "with", "budget", "urgency"].forEach((id) => {
+      $(id).addEventListener("input", clearOptionSuggestions);
+      $(id).addEventListener("change", clearOptionSuggestions);
+    });
 
     $("predict-button").addEventListener("click", async () => {
       try {
@@ -1169,6 +1336,7 @@
           setStatus("LLM or hybrid mode requires an API key in the LLM settings section.", true);
           return;
         }
+        prepareForNextPrediction();
         setStatus("Running prediction...");
         const prediction = await request("/decisions/predict", {
           method: "POST",

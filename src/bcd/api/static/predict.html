@@ -92,11 +92,28 @@
               </div>
 
               <div class="field">
-                <label>Candidate options</label>
+                <div class="section-header">
+                  <label>Candidate options</label>
+                  <button class="secondary" id="suggest-options-button" type="button">Suggest options</button>
+                </div>
+                <p class="help">Type your own options, or ask bcd to suggest options this user is realistically likely to consider.</p>
                 <div class="option-list" id="option-list"></div>
                 <div class="button-row inline">
                   <button class="secondary" id="add-option-button" type="button">Add option</button>
                   <button class="secondary" id="reset-button" type="button">Reset example</button>
+                </div>
+                <div class="suggestion-panel hidden" id="option-suggestion-panel">
+                  <div class="section-header">
+                    <div>
+                      <strong>Suggested options</strong>
+                      <p class="mini" id="option-suggestion-summary">Generated from the active profile, recent state, and relevant memories.</p>
+                    </div>
+                    <div class="button-row inline">
+                      <button class="secondary" id="add-suggestions-button" type="button">Add top suggestions</button>
+                      <button class="secondary" id="clear-suggestions-button" type="button">Clear</button>
+                    </div>
+                  </div>
+                  <div class="suggestion-list top-gap-sm" id="option-suggestion-list"></div>
                 </div>
               </div>
 

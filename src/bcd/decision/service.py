@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 import math
 from dataclasses import dataclass
 from typing import Literal
@@ -11,12 +12,15 @@ from sqlmodel import Session
 from bcd.config import Settings, get_settings
 from bcd.decision.schemas import (
     DecisionAudit,
+    DecisionOptionSuggestionInput,
     DecisionPredictionInput,
     ExplanationSections,
     LLMRuntimeConfig,
+    OptionSuggestionResponse,
     PredictionResponse,
     RankedOption,
     RankedOptionComponentScore,
+    SuggestedOption,
 )
 from bcd.decision.scoring import ComponentScore, ScoredOption, ScoringContext, default_scoring_pipeline
 from bcd.llm.base import LLMRankingRequest, LLMRankingResult, LLMRanker, NullLLMRanker
@@ -26,6 +30,75 @@ from bcd.profile.service import ProfileService
 from bcd.profile.schemas import PreferenceSnapshotRead, ProfileSignalRead
 from bcd.storage.models import DecisionOption, DecisionRequest, PredictionResult
 from bcd.storage.repository import BCDRepository
+from bcd.utils.text import flatten_to_text, tokenize
+
+
+SUGGESTION_LIBRARY: dict[str, list[dict[str, object]]] = {
+    "food": [
+        {"text": "Warm noodle soup", "tags": ["warm", "noodle", "soup", "cozy", "easy", "familiar", "dinner", "evening", "night", "rainy"]},
+        {"text": "Comfort rice bowl", "tags": ["warm", "rice", "comfort", "practical", "familiar", "lunch", "workday"]},
+        {"text": "Hot tea and snack set", "tags": ["warm", "tea", "light", "cozy", "easy", "morning", "break", "workday"]},
+        {"text": "Quick budget takeout", "tags": ["quick", "cheap", "affordable", "easy", "practical", "lunch", "workday", "office"]},
+        {"text": "Cozy shared pasta", "tags": ["cozy", "shared", "comfortable", "evening", "social"]},
+        {"text": "Shareable family pizza", "tags": ["shareable", "group", "familiar", "easy", "social"]},
+        {"text": "Fresh salad bowl", "tags": ["fresh", "light", "clean", "healthy", "lunch", "sunny", "workday"]},
+        {"text": "Heavy comfort burger", "tags": ["heavy", "greasy", "comfort"]},
+    ],
+    "entertainment": [
+        {"text": "A cozy short drama", "tags": ["cozy", "short", "drama", "familiar", "night", "indoor"]},
+        {"text": "A light comfort comedy", "tags": ["light", "comfort", "comedy", "easy", "familiar"]},
+        {"text": "A familiar rewatch night", "tags": ["familiar", "cozy", "easy", "night"]},
+        {"text": "A social game night", "tags": ["social", "group", "shared", "active"]},
+        {"text": "A quiet solo reading session", "tags": ["quiet", "alone", "cozy", "easy"]},
+        {"text": "A bright travel documentary", "tags": ["fresh", "morning", "explore", "light"]},
+        {"text": "An intense long thriller", "tags": ["intense", "long", "dark"]},
+    ],
+    "study": [
+        {"text": "Structured checklist sprint", "tags": ["structured", "checklist", "finishable", "clear", "quick"]},
+        {"text": "Short focused review block", "tags": ["short", "focused", "practical", "clear"]},
+        {"text": "Practical example walkthrough", "tags": ["practical", "incremental", "clear", "focused"]},
+        {"text": "Quick summary pass", "tags": ["quick", "simple", "finishable", "light"]},
+        {"text": "Long open-ended exploration", "tags": ["open-ended", "ambitious", "long", "chaotic"]},
+        {"text": "Deep ambitious research sprint", "tags": ["ambitious", "deep", "long", "complex"]},
+    ],
+    "shopping": [
+        {"text": "Practical durable option", "tags": ["practical", "durable", "reliable", "value"]},
+        {"text": "Budget-friendly basic version", "tags": ["budget", "cheap", "affordable", "practical"]},
+        {"text": "One worthwhile quality upgrade", "tags": ["quality", "worthwhile", "reliable"]},
+        {"text": "Comfort purchase that feels easy", "tags": ["comfort", "easy", "familiar"]},
+        {"text": "Novel impulse pick", "tags": ["novel", "spontaneous", "risky"]},
+    ],
+    "custom": [
+        {"text": "The familiar safe option", "tags": ["familiar", "safe", "easy", "reliable"]},
+        {"text": "The simple low-friction option", "tags": ["simple", "easy", "quick", "practical"]},
+        {"text": "The social shared option", "tags": ["shared", "social", "group"]},
+        {"text": "The ambitious stretch option", "tags": ["ambitious", "explore", "complex"]},
+        {"text": "The budget-aware practical option", "tags": ["budget", "cheap", "practical", "value"]},
+    ],
+}
+
+SUGGESTION_STOPWORDS = {
+    "a",
+    "an",
+    "the",
+    "and",
+    "or",
+    "to",
+    "of",
+    "for",
+    "after",
+    "before",
+    "with",
+    "without",
+    "choose",
+    "pick",
+    "what",
+    "should",
+    "i",
+    "my",
+    "me",
+    "something",
+}
 
 
 @dataclass(slots=True)
@@ -50,6 +123,93 @@ class DecisionService:
         self.profile_service = ProfileService(session, self.settings)
         self.scoring_pipeline = default_scoring_pipeline()
         self.llm_ranker = llm_ranker or OpenAICompatibleLLMRanker.from_settings(self.settings) or NullLLMRanker()
+
+    def suggest_options(self, payload: DecisionOptionSuggestionInput) -> OptionSuggestionResponse:
+        user = self.repository.get_user_profile(payload.user_id)
+        if user is None:
+            raise ValueError(f"User profile '{payload.user_id}' was not found.")
+        if not payload.prompt.strip():
+            raise ValueError("Enter a question before requesting option suggestions.")
+
+        snapshot = self._load_snapshot(payload.user_id)
+        profile_signals = self.profile_service.get_profile_signals(payload.user_id)
+        recent_state_payload = self.profile_service.get_recent_state_payload(payload.user_id)
+        effective_context = dict(payload.context)
+        suggestion_sources = self._build_suggestion_candidates(
+            user_id=payload.user_id,
+            category=payload.category,
+            prompt=payload.prompt,
+            existing_options=payload.existing_options,
+            long_term_preferences=user.long_term_preferences_json,
+            recent_state_payload=recent_state_payload,
+            snapshot=snapshot,
+            effective_context=effective_context,
+            max_candidates=max(payload.max_suggestions * 3, 6),
+        )
+        if not suggestion_sources:
+            raise ValueError("No personalized option suggestions were available for this request.")
+
+        candidate_texts = list(suggestion_sources.keys())
+        retrieved_memories = self.retriever.retrieve(
+            RetrievalQuery(
+                user_id=payload.user_id,
+                category=payload.category,
+                prompt=payload.prompt,
+                options=candidate_texts,
+                context=payload.context,
+                limit=self.settings.retrieval_top_k,
+            )
+        )
+        scoring_context = ScoringContext(
+            category=payload.category,
+            prompt=payload.prompt,
+            context=payload.context,
+            long_term_preferences=user.long_term_preferences_json,
+            profile_signals=profile_signals,
+            snapshot=snapshot,
+            recent_state_notes=recent_state_payload["combined_notes"],
+            retrieved_memories=retrieved_memories,
+            effective_context=effective_context,
+        )
+        scored_candidates = [
+            self.scoring_pipeline.score_option(
+                scoring_context=scoring_context,
+                option=DecisionOption(
+                    request_id="suggestion-preview",
+                    option_text=option_text,
+                    option_metadata_json={
+                        "suggested": True,
+                        "suggestion_tags": sorted(suggestion_sources[option_text]["tags"]),
+                    },
+                    position=index,
+                ),
+            )
+            for index, option_text in enumerate(candidate_texts)
+        ]
+        ranked = self._normalize_suggested_options(
+            scored=scored_candidates,
+            prompt=payload.prompt,
+            context=effective_context,
+            suggestion_sources=suggestion_sources,
+        )
+        suggestions = [
+            SuggestedOption(
+                option_text=item.scored_option.option.option_text,
+                confidence=round(item.confidence, 4),
+                rationale=self._build_suggestion_rationale(item.scored_option),
+                source_labels=self._build_suggestion_source_labels(
+                    initial_labels=suggestion_sources[item.scored_option.option.option_text]["labels"],
+                    scored_option=item.scored_option,
+                ),
+                supporting_evidence=item.scored_option.supporting_evidence[:3],
+            )
+            for item in ranked[: payload.max_suggestions]
+        ]
+        return OptionSuggestionResponse(
+            strategy="profile-memory-suggestion-ranker",
+            active_context=effective_context,
+            suggestions=suggestions,
+        )
 
     def predict(self, payload: DecisionPredictionInput) -> PredictionResponse:
         user = self.repository.get_user_profile(payload.user_id)
@@ -436,6 +596,205 @@ class DecisionService:
             why_other_options_lost=losing_reasons[:4],
         )
 
+    def _build_suggestion_candidates(
+        self,
+        user_id: str,
+        category: str,
+        prompt: str,
+        existing_options: list[str],
+        long_term_preferences: dict,
+        recent_state_payload: dict,
+        snapshot: PreferenceSnapshotRead | None,
+        effective_context: dict,
+        max_candidates: int,
+    ) -> dict[str, dict[str, object]]:
+        candidate_sources: OrderedDict[str, dict[str, object]] = OrderedDict()
+        excluded = {option.strip().lower() for option in existing_options if option.strip()}
+
+        category_preferences = long_term_preferences.get("category_preferences", {}).get(category, {})
+        preferred_tokens = {token.lower() for token in category_preferences.get("preferred_keywords", [])}
+        active_context_keys = self._context_preference_keys(effective_context)
+        context_tokens: set[str] = set()
+        context_preferences = long_term_preferences.get("context_preferences", {})
+        for key in active_context_keys:
+            context_tokens.update(str(token).lower() for token in context_preferences.get(key, []))
+        prompt_tokens = self._suggestion_tokens(prompt)
+        recent_tokens = {
+            token.lower()
+            for token in self._suggestion_tokens(" ".join(recent_state_payload.get("combined_notes", [])[:3]))
+        }
+
+        def add_candidate(
+            option_text: str,
+            labels: list[str],
+            tags: set[str] | None = None,
+            seed_score: float = 0.0,
+        ) -> None:
+            normalized = option_text.strip()
+            if not normalized or normalized.lower() in excluded:
+                return
+            if normalized not in candidate_sources:
+                candidate_sources[normalized] = {"labels": [], "tags": set(), "seed_score": 0.0}
+            for label in labels:
+                if label and label not in candidate_sources[normalized]["labels"]:
+                    candidate_sources[normalized]["labels"].append(label)
+            if tags:
+                candidate_sources[normalized]["tags"].update(tags)
+            candidate_sources[normalized]["seed_score"] = max(
+                float(candidate_sources[normalized]["seed_score"]),
+                float(seed_score),
+            )
+
+        for memory in self.repository.list_memories(user_id, limit=12):
+            if memory.category != category:
+                continue
+            memory_tags = self._suggestion_tokens(
+                memory.summary,
+                memory.chosen_option_text,
+                flatten_to_text(memory.context_json),
+                *[str(tag) for tag in memory.tags_json],
+            )
+            prompt_overlap = len(memory_tags & prompt_tokens)
+            context_overlap = len(memory_tags & context_tokens)
+            recent_overlap = len(memory_tags & recent_tokens)
+            if prompt_overlap + context_overlap < 2:
+                continue
+            seed_score = prompt_overlap * 2.5 + context_overlap * 2.1 + recent_overlap * 1.0 + memory.salience_score * 0.3
+            add_candidate(
+                memory.chosen_option_text,
+                ["recent memory"],
+                tags=memory_tags,
+                seed_score=seed_score,
+            )
+
+        if snapshot is not None:
+            recent_options = snapshot.derived_statistics.get("recent_option_counts", {}).get(category, {})
+            for option_text in recent_options:
+                option_tags = self._suggestion_tokens(option_text)
+                overlap = len(option_tags & prompt_tokens) + len(option_tags & context_tokens)
+                if overlap:
+                    add_candidate(option_text, ["recent trend"], tags=option_tags, seed_score=overlap * 1.7)
+
+        library = SUGGESTION_LIBRARY.get(category, SUGGESTION_LIBRARY["custom"])
+        scored_entries: list[tuple[float, int, dict[str, object], list[str]]] = []
+        for index, entry in enumerate(library):
+            entry_tags = {str(tag).lower() for tag in entry.get("tags", [])}
+            labels = ["candidate archetype"]
+            profile_overlap = len(entry_tags & preferred_tokens)
+            context_overlap = len(entry_tags & context_tokens)
+            prompt_overlap = len(entry_tags & prompt_tokens)
+            recent_overlap = len(entry_tags & recent_tokens)
+            if profile_overlap:
+                labels.append("stable profile")
+            if context_overlap:
+                labels.append("current context")
+            if recent_overlap:
+                labels.append("recent state")
+            if prompt_overlap:
+                labels.append("prompt framing")
+            score = (
+                profile_overlap * 1.45
+                + context_overlap * 2.4
+                + recent_overlap * 1.0
+                + prompt_overlap * 2.8
+            )
+            scored_entries.append((score, index, entry, labels))
+
+        scored_entries.sort(key=lambda item: (-item[0], item[1]))
+        for score, _, entry, labels in scored_entries:
+            if score > 0 or len(candidate_sources) < max_candidates:
+                add_candidate(
+                    str(entry["text"]),
+                    labels,
+                    tags={str(tag).lower() for tag in entry.get("tags", [])},
+                    seed_score=score,
+                )
+            if len(candidate_sources) >= max_candidates:
+                break
+
+        for option_text, payload in candidate_sources.items():
+            payload["tags"].update(self._suggestion_tokens(option_text))
+
+        return dict(candidate_sources)
+
+    def _normalize_suggested_options(
+        self,
+        scored: list[ScoredOption],
+        prompt: str,
+        context: dict,
+        suggestion_sources: dict[str, dict[str, object]],
+    ) -> list[_ResolvedOptionScore]:
+        adjusted_scores: list[float] = []
+        for item in scored:
+            source_payload = suggestion_sources.get(item.option.option_text, {})
+            seed_score = float(source_payload.get("seed_score", 0.0))
+            prompt_alignment = self._compute_suggestion_prompt_alignment(
+                prompt=prompt,
+                context=context,
+                option_text=item.option.option_text,
+                tags={str(tag).lower() for tag in source_payload.get("tags", set())},
+            )
+            base_score = 0.1
+            for component in item.component_scores:
+                weight = 1.0
+                if component.name == "memory_support":
+                    weight = 0.2
+                elif component.name == "recent_trend_influence":
+                    weight = 0.45
+                base_score += component.weighted_score * weight
+            adjusted_scores.append(base_score + seed_score * 0.12 + prompt_alignment * 1.8)
+        confidences = self._softmax(adjusted_scores)
+        ranked = [
+            _ResolvedOptionScore(scored_option=item, confidence=confidence)
+            for item, confidence in zip(scored, confidences, strict=True)
+        ]
+        ranked.sort(key=lambda item: item.confidence, reverse=True)
+        return ranked
+
+    @staticmethod
+    def _suggestion_tokens(*parts: str) -> set[str]:
+        tokens: set[str] = set()
+        for part in parts:
+            for token in tokenize(part):
+                normalized = str(token).lower().strip()
+                if len(normalized) <= 2 or normalized in SUGGESTION_STOPWORDS:
+                    continue
+                tokens.add(normalized)
+        return tokens
+
+    @staticmethod
+    def _compute_suggestion_prompt_alignment(
+        prompt: str,
+        context: dict,
+        option_text: str,
+        tags: set[str],
+    ) -> float:
+        prompt_tokens = DecisionService._suggestion_tokens(prompt)
+        option_tokens = DecisionService._suggestion_tokens(option_text)
+        combined_tokens = set(tags) | option_tokens
+        score = len(combined_tokens & prompt_tokens) * 0.55
+
+        prompt_text = prompt.lower()
+        if "lunch" in prompt_text:
+            if combined_tokens & {"light", "fresh", "quick", "salad", "tea"}:
+                score += 3.2
+            if combined_tokens & {"heavy", "cozy", "night", "stew", "warm", "soup", "noodle"}:
+                score -= 3.4
+        if "dinner" in prompt_text or "evening" in prompt_text or "tonight" in prompt_text:
+            if combined_tokens & {"warm", "cozy", "shared", "soup", "noodle"}:
+                score += 1.35
+        if "watch" in prompt_text or "movie" in prompt_text or "show" in prompt_text:
+            if combined_tokens & {"drama", "comedy", "rewatch", "thriller", "documentary"}:
+                score += 0.9
+        weather = str(context.get("weather", "")).lower()
+        if weather == "sunny" and combined_tokens & {"fresh", "light", "outdoor"}:
+            score += 1.8
+        if weather == "sunny" and combined_tokens & {"warm", "cozy", "soup", "noodle"}:
+            score -= 2.4
+        if weather == "rainy" and combined_tokens & {"warm", "cozy", "indoor"}:
+            score += 1.1
+        return score
+
     @staticmethod
     def _build_effective_context(
         request_context: dict,
@@ -449,6 +808,54 @@ class DecisionService:
         for key, value in active_overrides.items():
             effective_context.setdefault(key, value)
         return effective_context
+
+    @staticmethod
+    def _context_preference_keys(effective_context: dict) -> list[str]:
+        keys: list[str] = []
+        energy = str(effective_context.get("energy", "")).strip().lower()
+        if energy in {"low", "high"}:
+            keys.append(f"energy_{energy}")
+        social = str(effective_context.get("with", "")).strip().lower()
+        if social in {"alone", "partner", "friends", "family"}:
+            keys.append(f"with_{social}")
+        budget = str(effective_context.get("budget", "")).strip().lower()
+        if budget in {"low", "tight"}:
+            keys.append("budget_sensitive")
+        urgency = str(effective_context.get("urgency", "")).strip().lower()
+        if urgency == "high":
+            keys.append("time_pressure")
+        time_of_day = str(effective_context.get("time_of_day", "")).strip().lower()
+        if time_of_day:
+            keys.append(f"time_of_day_{time_of_day}")
+        weather = str(effective_context.get("weather", "")).strip().lower()
+        if weather:
+            keys.append(f"weather_{weather}")
+        return keys
+
+    @staticmethod
+    def _build_suggestion_rationale(scored_option: ScoredOption) -> str:
+        if scored_option.supporting_evidence:
+            return " ".join(scored_option.supporting_evidence[:2])
+        return scored_option.reason_summary
+
+    @staticmethod
+    def _build_suggestion_source_labels(initial_labels: list[str], scored_option: ScoredOption) -> list[str]:
+        labels = list(initial_labels)
+        component_label_map = {
+            "profile_affinity": "stable profile",
+            "memory_support": "memory match",
+            "context_compatibility": "current context",
+            "recent_state_influence": "recent state",
+            "recent_trend_influence": "recent trend",
+            "adaptive_context_alignment": "current context",
+        }
+        for component in scored_option.component_scores:
+            if component.weighted_score <= 0:
+                continue
+            label = component_label_map.get(component.name)
+            if label and label not in labels:
+                labels.append(label)
+        return labels[:4]
 
     @staticmethod
     def _build_decision_audit(
