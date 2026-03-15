@@ -1,0 +1,85 @@
+<svg width="1200" height="720" viewBox="0 0 1200 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="40" x2="1040" y2="680" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FBFF"/>
+      <stop offset="1" stop-color="#EEF4FF"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F8FAFF"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="1200" height="720" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="32" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="720" rx="32" fill="url(#bg)"/>
+  <circle cx="1040" cy="90" r="130" fill="#DCEBFF"/>
+  <circle cx="112" cy="626" r="144" fill="#E8F0FF"/>
+
+  <g filter="url(#shadow)">
+    <rect x="60" y="56" width="1080" height="608" rx="28" fill="white" fill-opacity="0.88"/>
+  </g>
+
+  <rect x="96" y="96" width="460" height="18" rx="9" fill="#E6EDFF"/>
+  <rect x="96" y="136" width="88" height="36" rx="18" fill="#E8F0FF"/>
+  <text x="140" y="159" text-anchor="middle" fill="#1D4ED8" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700">bcd</text>
+
+  <text x="96" y="232" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="58" font-weight="800">Personalized</text>
+  <text x="96" y="292" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="58" font-weight="800">choice AI</text>
+
+  <text x="96" y="352" fill="#51607C" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="500">
+    Predict what a specific person is likely to choose.
+  </text>
+  <text x="96" y="388" fill="#51607C" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="500">
+    Profile, memory, recent state, explanations, and feedback all stay in the loop.
+  </text>
+
+  <rect x="96" y="442" width="182" height="44" rx="22" fill="#EFF5FF"/>
+  <rect x="292" y="442" width="170" height="44" rx="22" fill="#EFF5FF"/>
+  <rect x="476" y="442" width="170" height="44" rx="22" fill="#EFF5FF"/>
+  <text x="187" y="470" text-anchor="middle" fill="#1D4ED8" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700">Profile + recent state</text>
+  <text x="377" y="470" text-anchor="middle" fill="#1D4ED8" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700">Memory retrieval</text>
+  <text x="561" y="470" text-anchor="middle" fill="#1D4ED8" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700">Feedback adaptation</text>
+
+  <g>
+    <rect x="690" y="118" width="388" height="164" rx="24" fill="url(#card)" stroke="#D9E4FF"/>
+    <rect x="720" y="148" width="96" height="28" rx="14" fill="#E8F0FF"/>
+    <text x="768" y="167" text-anchor="middle" fill="#1D4ED8" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700">Question</text>
+    <text x="720" y="214" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">Pick dinner after a tiring rainy evening.</text>
+    <rect x="720" y="236" width="130" height="14" rx="7" fill="#EAF0FF"/>
+    <rect x="860" y="236" width="106" height="14" rx="7" fill="#EAF0FF"/>
+    <rect x="976" y="236" width="72" height="14" rx="7" fill="#EAF0FF"/>
+  </g>
+
+  <g>
+    <rect x="650" y="310" width="210" height="258" rx="24" fill="url(#card)" stroke="#D9E4FF"/>
+    <text x="680" y="350" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">Suggested options</text>
+    <rect x="680" y="376" width="150" height="12" rx="6" fill="#EAF0FF"/>
+    <rect x="680" y="412" width="150" height="46" rx="14" fill="white" stroke="#E0E8FA"/>
+    <text x="698" y="440" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700">Warm noodle soup</text>
+    <rect x="680" y="472" width="150" height="46" rx="14" fill="white" stroke="#E0E8FA"/>
+    <text x="698" y="500" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700">Cozy shared pasta</text>
+    <rect x="680" y="532" width="150" height="46" rx="14" fill="white" stroke="#E0E8FA"/>
+    <text x="698" y="560" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700">Quick budget takeout</text>
+  </g>
+
+  <g>
+    <rect x="884" y="310" width="194" height="258" rx="24" fill="url(#card)" stroke="#D9E4FF"/>
+    <text x="914" y="350" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">Decision audit</text>
+    <rect x="914" y="378" width="84" height="32" rx="16" fill="#ECFDF5"/>
+    <rect x="1008" y="378" width="52" height="32" rx="16" fill="#EFF5FF"/>
+    <text x="956" y="399" text-anchor="middle" fill="#0F766E" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">high</text>
+    <text x="1034" y="399" text-anchor="middle" fill="#1D4ED8" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">12pt</text>
+    <rect x="914" y="434" width="134" height="12" rx="6" fill="#EAF0FF"/>
+    <rect x="914" y="458" width="120" height="12" rx="6" fill="#EAF0FF"/>
+    <rect x="914" y="494" width="134" height="12" rx="6" fill="#EAF0FF"/>
+    <rect x="914" y="518" width="104" height="12" rx="6" fill="#EAF0FF"/>
+    <rect x="914" y="554" width="146" height="38" rx="19" fill="url(#accent)"/>
+    <text x="987" y="578" text-anchor="middle" fill="white" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700">Feedback saved</text>
+  </g>
+</svg>

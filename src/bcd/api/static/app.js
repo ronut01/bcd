@@ -12,6 +12,7 @@
   ];
 
   const page = document.body.dataset.page;
+  const urlParams = new URLSearchParams(window.location.search);
   let onboardingQuestionnaire = null;
   let latestPrediction = null;
   let optionSuggestions = [];
@@ -46,6 +47,50 @@
       window.localStorage.setItem(ACTIVE_USER_KEY, userId);
     } else {
       window.localStorage.removeItem(ACTIVE_USER_KEY);
+    }
+  }
+
+  function applyUrlStateOverrides() {
+    const userId = (urlParams.get("user_id") || "").trim();
+    if (userId) {
+      setActiveUserId(userId);
+    }
+  }
+
+  function getUrlOptionOverrides() {
+    const repeated = urlParams.getAll("option").map((value) => value.trim()).filter(Boolean);
+    if (repeated.length) {
+      return repeated;
+    }
+    return (urlParams.get("options") || "")
+      .split("|")
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+
+  function applyPredictUrlOverrides() {
+    if (page !== "predict") return;
+    const fieldMap = {
+      category: "category",
+      prompt: "prompt",
+      mode: "prediction-mode",
+      time_of_day: "time_of_day",
+      energy: "energy",
+      weather: "weather",
+      with: "with",
+      budget: "budget",
+      urgency: "urgency",
+    };
+    Object.entries(fieldMap).forEach(([param, fieldId]) => {
+      const value = (urlParams.get(param) || "").trim();
+      if (value && $(fieldId)) {
+        $(fieldId).value = value;
+      }
+    });
+    const options = getUrlOptionOverrides();
+    if (options.length && $("option-list")) {
+      $("option-list").innerHTML = "";
+      options.slice(0, 5).forEach((optionText) => createOptionRow(optionText));
     }
   }
 
@@ -1276,29 +1321,7 @@
     $("prediction-modal-backdrop").addEventListener("click", closePredictionModal);
     $("suggest-options-button").addEventListener("click", async () => {
       try {
-        const payload = {
-          user_id: $("user-id").value.trim(),
-          prompt: $("prompt").value.trim(),
-          category: $("category").value.trim(),
-          context: getContextPayload(),
-          existing_options: getCurrentOptionTexts(),
-          max_suggestions: 4,
-        };
-        if (!payload.user_id) {
-          setStatus("Load a user before requesting suggested options.", true);
-          return;
-        }
-        if (!payload.prompt) {
-          setStatus("Enter a question before requesting suggested options.", true);
-          return;
-        }
-        setStatus("Generating personalized option suggestions...");
-        const response = await request("/decisions/suggest-options", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
-        renderOptionSuggestions(response);
-        setStatus("Suggested options are ready. Add the ones that feel realistic for this user.");
+        await suggestOptionsFromCurrentForm();
       } catch (error) {
         setStatus(error.message, true);
       }
@@ -1326,31 +1349,7 @@
     });
 
     $("predict-button").addEventListener("click", async () => {
-      try {
-        const payload = getPredictionPayload();
-        if (!payload.user_id || !payload.prompt || payload.options.length < 2) {
-          setStatus("Please provide an active user, a prompt, and at least two options.", true);
-          return;
-        }
-        if (payload.prediction_mode !== "baseline" && !payload.llm_config) {
-          setStatus("LLM or hybrid mode requires an API key in the LLM settings section.", true);
-          return;
-        }
-        prepareForNextPrediction();
-        setStatus("Running prediction...");
-        const prediction = await request("/decisions/predict", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
-        renderPrediction(prediction);
-        setStatus(
-          prediction.llm_error
-            ? `Prediction complete with fallback. Top choice: ${prediction.predicted_option_text}`
-            : `Prediction complete. Top choice: ${prediction.predicted_option_text}`,
-        );
-      } catch (error) {
-        setStatus(error.message, true);
-      }
+      await runPredictionFromForm();
     });
 
     $("feedback-button").addEventListener("click", async () => {
@@ -1392,19 +1391,119 @@
     });
   }
 
+  async function runPredictionFromForm() {
+    try {
+      const payload = getPredictionPayload();
+      if (!payload.user_id || !payload.prompt || payload.options.length < 2) {
+        setStatus("Please provide an active user, a prompt, and at least two options.", true);
+        return;
+      }
+      if (payload.prediction_mode !== "baseline" && !payload.llm_config) {
+        setStatus("LLM or hybrid mode requires an API key in the LLM settings section.", true);
+        return;
+      }
+      prepareForNextPrediction();
+      setStatus("Running prediction...");
+      const prediction = await request("/decisions/predict", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      renderPrediction(prediction);
+      setStatus(
+        prediction.llm_error
+          ? `Prediction complete with fallback. Top choice: ${prediction.predicted_option_text}`
+          : `Prediction complete. Top choice: ${prediction.predicted_option_text}`,
+      );
+    } catch (error) {
+      setStatus(error.message, true);
+    }
+  }
+
+  async function suggestOptionsFromCurrentForm() {
+    const payload = {
+      user_id: $("user-id").value.trim(),
+      prompt: $("prompt").value.trim(),
+      category: $("category").value.trim(),
+      context: getContextPayload(),
+      existing_options: getCurrentOptionTexts(),
+      max_suggestions: 4,
+    };
+    if (!payload.user_id) {
+      setStatus("Load a user before requesting suggested options.", true);
+      return;
+    }
+    if (!payload.prompt) {
+      setStatus("Enter a question before requesting suggested options.", true);
+      return;
+    }
+    setStatus("Generating personalized option suggestions...");
+    const response = await request("/decisions/suggest-options", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    renderOptionSuggestions(response);
+    setStatus("Suggested options are ready. Add the ones that feel realistic for this user.");
+  }
+
+  async function saveAutomatedFeedbackIfRequested() {
+    if (page !== "predict" || urlParams.get("autofeedback") !== "1" || !latestPrediction) {
+      return;
+    }
+    const actualOptionId =
+      (urlParams.get("actual_option_id") || "").trim() || latestPrediction.predicted_option_id;
+    if ($("actual-option")) {
+      $("actual-option").value = actualOptionId;
+    }
+    if ($("reason-text")) {
+      $("reason-text").value =
+        (urlParams.get("reason_text") || "").trim() || "Matches the recent pattern for this user.";
+    }
+    if ($("reason-tags")) {
+      $("reason-tags").value = (urlParams.get("reason_tags") || "recent_state,stable_preference").trim();
+    }
+    $("feedback-button").click();
+    await new Promise((resolve) => window.setTimeout(resolve, 1200));
+  }
+
+  function focusDemoSectionFromUrl() {
+    if (page !== "predict") return;
+    const focusTarget = (urlParams.get("focus") || "").trim();
+    if (!focusTarget) return;
+    const node = $(focusTarget);
+    if (node) {
+      node.scrollIntoView({ behavior: "instant", block: "start" });
+    }
+  }
+
+  async function runPredictAutomationFromUrl() {
+    if (page !== "predict") return;
+    if (urlParams.get("autosuggest") === "1") {
+      await suggestOptionsFromCurrentForm();
+    }
+    if (urlParams.get("autorun") === "1" && getActiveUserId()) {
+      await runPredictionFromForm();
+      await saveAutomatedFeedbackIfRequested();
+    }
+    focusDemoSectionFromUrl();
+  }
+
   async function init() {
     try {
+      applyUrlStateOverrides();
       ensureErrorModal();
       if (page === "setup") {
         await loadOnboardingQuestionnaire();
         wireSetupPage();
         if (getActiveUserId()) {
           await hydrateReviewSummary();
+          setSetupStep(3);
         }
       }
       if (page === "predict") {
         wirePredictPage();
         await hydratePredictWorkspace();
+        applyPredictUrlOverrides();
+        await runPredictAutomationFromUrl();
       }
     } catch (error) {
       setStatus(error.message, true);

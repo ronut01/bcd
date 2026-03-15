@@ -1,0 +1,29 @@
+<svg width="640" height="400" viewBox="0 0 640 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="640" height="400" rx="24" fill="#F6F8FB"/>
+  <rect x="28" y="28" width="584" height="344" rx="24" fill="#FFFFFF" stroke="#E2E8F5"/>
+  <text x="48" y="68" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="800">Prediction workspace</text>
+  <text x="48" y="96" fill="#5F6B85" font-family="Inter, Arial, sans-serif" font-size="15">Ask the decision, mix manual options with suggestions, then run prediction.</text>
+
+  <rect x="48" y="126" width="352" height="82" rx="18" fill="#F8FAFF" stroke="#E2E8F5"/>
+  <text x="64" y="154" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700">Pick dinner after a tiring rainy evening.</text>
+  <rect x="64" y="172" width="126" height="10" rx="5" fill="#E6EDFF"/>
+  <rect x="198" y="172" width="84" height="10" rx="5" fill="#E6EDFF"/>
+
+  <rect x="48" y="228" width="352" height="40" rx="14" fill="#FFFFFF" stroke="#E2E8F5"/>
+  <text x="66" y="254" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700">Warm noodle soup</text>
+  <rect x="48" y="278" width="352" height="40" rx="14" fill="#FFFFFF" stroke="#E2E8F5"/>
+  <text x="66" y="304" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700">Greasy burger</text>
+  <rect x="48" y="328" width="352" height="40" rx="14" fill="#FFFFFF" stroke="#E2E8F5"/>
+  <text x="66" y="354" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700">Raw salad</text>
+
+  <rect x="424" y="126" width="160" height="40" rx="20" fill="#2563EB"/>
+  <text x="504" y="151" text-anchor="middle" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700">Suggest options</text>
+
+  <rect x="424" y="184" width="160" height="156" rx="18" fill="#F8FAFF" stroke="#E2E8F5"/>
+  <text x="442" y="212" fill="#1D4ED8" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">Suggested options</text>
+  <rect x="442" y="228" width="124" height="36" rx="12" fill="#FFFFFF" stroke="#E2E8F5"/>
+  <text x="454" y="250" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">Cozy shared pasta</text>
+  <rect x="442" y="274" width="124" height="36" rx="12" fill="#FFFFFF" stroke="#E2E8F5"/>
+  <text x="454" y="296" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">Quick takeout</text>
+  <rect x="442" y="320" width="124" height="10" rx="5" fill="#E6EDFF"/>
+</svg>

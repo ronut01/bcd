@@ -1,0 +1,29 @@
+<svg width="640" height="400" viewBox="0 0 640 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="640" height="400" rx="24" fill="#F6F8FB"/>
+  <rect x="28" y="28" width="584" height="344" rx="24" fill="#FFFFFF" stroke="#E2E8F5"/>
+  <text x="48" y="68" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="800">User setup</text>
+  <text x="48" y="96" fill="#5F6B85" font-family="Inter, Arial, sans-serif" font-size="15">Create or import a profile, then review what bcd thinks matters.</text>
+
+  <rect x="48" y="128" width="172" height="100" rx="18" fill="#F8FAFF" stroke="#E2E8F5"/>
+  <text x="64" y="156" fill="#1D4ED8" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">Stable profile</text>
+  <rect x="64" y="172" width="112" height="10" rx="5" fill="#E6EDFF"/>
+  <rect x="64" y="192" width="136" height="10" rx="5" fill="#E6EDFF"/>
+  <rect x="64" y="212" width="94" height="10" rx="5" fill="#E6EDFF"/>
+
+  <rect x="236" y="128" width="172" height="100" rx="18" fill="#F8FAFF" stroke="#E2E8F5"/>
+  <text x="252" y="156" fill="#1D4ED8" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">Signal review</text>
+  <rect x="252" y="172" width="124" height="34" rx="12" fill="#FFFFFF" stroke="#E2E8F5"/>
+  <rect x="252" y="212" width="98" height="10" rx="5" fill="#E6EDFF"/>
+
+  <rect x="424" y="128" width="168" height="100" rx="18" fill="#F8FAFF" stroke="#E2E8F5"/>
+  <text x="440" y="156" fill="#1D4ED8" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">Recent state</text>
+  <rect x="440" y="172" width="120" height="10" rx="5" fill="#E6EDFF"/>
+  <rect x="440" y="192" width="104" height="10" rx="5" fill="#E6EDFF"/>
+  <rect x="440" y="212" width="132" height="10" rx="5" fill="#E6EDFF"/>
+
+  <rect x="48" y="252" width="544" height="92" rx="18" fill="#F8FAFF" stroke="#E2E8F5"/>
+  <text x="64" y="282" fill="#0F172A" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700">Current profile: Alex Chen</text>
+  <text x="64" y="312" fill="#5F6B85" font-family="Inter, Arial, sans-serif" font-size="15">Practical, familiar, energy-aware choices with stronger social flexibility when context changes.</text>
+  <rect x="64" y="324" width="126" height="12" rx="6" fill="#E8F0FF"/>
+  <rect x="198" y="324" width="148" height="12" rx="6" fill="#E8F0FF"/>
+</svg>
