@@ -66,6 +66,7 @@ def test_scoring_pipeline_returns_modular_component_scores():
                 created_at=datetime.now(timezone.utc),
             )
         ],
+        effective_context={"energy": "low", "weather": "rainy", "time_of_day": "night"},
     )
     option = DecisionOption(request_id="req-1", option_text="Warm noodle soup", option_metadata_json={}, position=0)
 
@@ -78,5 +79,6 @@ def test_scoring_pipeline_returns_modular_component_scores():
         "context_compatibility",
         "recent_state_influence",
         "recent_trend_influence",
+        "adaptive_context_alignment",
     }
     assert scored.supporting_evidence

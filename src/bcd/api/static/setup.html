@@ -19,11 +19,8 @@
       <section class="hero">
         <article class="panel hero-copy">
           <span class="eyebrow">Personalized choice prediction</span>
-          <h1>Set up a user in a few focused steps.</h1>
-          <p>
-            This setup flow is intentionally short. Create or import a user, review the summary,
-            and only open deeper adjustments if you actually need them.
-          </p>
+          <h1>Set up a user fast, then get to prediction.</h1>
+          <p>Create or import, review the profile once, and move on.</p>
         </article>
         <aside class="panel hero-side">
           <div class="metric-strip">
@@ -40,10 +37,7 @@
               <strong id="setup-metric-notes">0</strong>
             </div>
           </div>
-          <p>
-            The prediction screen stays clean. Use this page only for creation, summary review,
-            and optional profile corrections.
-          </p>
+          <p>Keep setup here. Keep prediction focused on the decision itself.</p>
           <div class="button-row inline">
             <a class="button-link primary" href="/app/predict">Open prediction workspace</a>
           </div>
@@ -57,29 +51,29 @@
           <div class="wizard-step" data-step="1">
             <span class="wizard-step-number">1</span>
             <div>
-              <strong>Choose source</strong>
-              <div class="mini">Pick how to start</div>
+              <strong>Source</strong>
+              <div class="mini">Start point</div>
             </div>
           </div>
           <div class="wizard-step" data-step="2">
             <span class="wizard-step-number">2</span>
             <div>
-              <strong>Create user</strong>
+              <strong>Create</strong>
               <div class="mini">Answer or import</div>
             </div>
           </div>
           <div class="wizard-step" data-step="3">
             <span class="wizard-step-number">3</span>
             <div>
-              <strong>Review summary</strong>
-              <div class="mini">Check the model</div>
+              <strong>Review</strong>
+              <div class="mini">Quick check</div>
             </div>
           </div>
           <div class="wizard-step" data-step="4">
             <span class="wizard-step-number">4</span>
             <div>
-              <strong>Optional adjustments</strong>
-              <div class="mini">Correct and inspect</div>
+              <strong>Adjust</strong>
+              <div class="mini">Optional only</div>
             </div>
           </div>
         </div>
@@ -89,22 +83,22 @@
         <article class="panel wizard-panel" id="setup-step-1">
           <span class="section-tag">Step 1</span>
           <h2>Choose source</h2>
-          <p class="help">Start from a sample user, a structured onboarding flow, or a ChatGPT export.</p>
+          <p class="help">Choose the fastest way to get a usable profile.</p>
           <div class="source-card-grid top-gap">
             <button class="source-card" id="choose-source-sample" type="button">
               <span class="section-tag">Fastest</span>
               <strong>Load sample profile</strong>
-              <p class="help">Use the built-in sample user and jump straight to a review summary.</p>
+              <p class="help">Open the built-in user and skip straight to review.</p>
             </button>
             <button class="source-card" id="choose-source-structured" type="button">
               <span class="section-tag">Guided</span>
               <strong>Structured onboarding</strong>
-              <p class="help">Answer short multiple-choice questions and build a new user profile.</p>
+              <p class="help">Answer a few questions and build a fresh profile.</p>
             </button>
             <button class="source-card" id="choose-source-import" type="button">
               <span class="section-tag">Imported</span>
               <strong>Import ChatGPT export</strong>
-              <p class="help">Upload a `.zip` or `conversations.json` and infer a starter profile.</p>
+              <p class="help">Upload a `.zip` or `conversations.json` for a starter profile.</p>
             </button>
           </div>
           <div id="setup-existing-user-banner" class="list-card top-gap-sm hidden">
@@ -120,7 +114,7 @@
         <article class="panel wizard-panel hidden" id="setup-step-2">
           <span class="section-tag">Step 2</span>
           <h2 id="create-user-title">Create user</h2>
-          <p class="help" id="create-user-help">Set up the chosen source and continue.</p>
+          <p class="help" id="create-user-help">Complete the setup and continue.</p>
 
           <div id="structured-create-flow" class="hidden top-gap">
             <div class="wizard-card stack">
@@ -178,7 +172,7 @@
         <article class="panel wizard-panel hidden" id="setup-step-3">
           <span class="section-tag">Step 3</span>
           <h2>Review summary</h2>
-          <p class="help">This is the minimal review screen. It shows what the system thinks matters without exposing internal file dumps by default.</p>
+          <p class="help">Quickly confirm the model looks right, then move to prediction.</p>
           <div id="setup-review-empty" class="empty-state top-gap">
             <strong>No active user summary yet.</strong>
             <p>Create or load a user first, then return here to review the summary.</p>
@@ -188,7 +182,6 @@
               <section class="list-card">
                 <span class="mini">Active user</span>
                 <strong id="setup-user-name">-</strong>
-                <div class="mini" id="setup-user-id">-</div>
                 <p id="setup-user-summary" class="help">Profile summary will appear here.</p>
               </section>
               <section class="list-card">
@@ -221,7 +214,7 @@
         <article class="panel wizard-panel hidden" id="setup-step-4">
           <span class="section-tag">Step 4</span>
           <h2>Optional adjustments</h2>
-          <p class="help">Only use this step if you want to correct inferred signals, add temporary notes, or inspect deeper artifacts.</p>
+          <p class="help">Only open this if you want to correct or inspect something.</p>
           <div id="setup-adjustments-empty" class="empty-state top-gap">
             <strong>No active user yet.</strong>
             <p>Return to the earlier steps to create or load a user first.</p>

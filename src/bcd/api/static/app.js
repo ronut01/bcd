@@ -481,11 +481,10 @@
       fetchRecentState(userId),
     ]);
 
-    $("setup-metric-user").textContent = userId;
+    $("setup-metric-user").textContent = profile.display_name;
     $("setup-metric-signals").textContent = String(profile.signal_count || 0);
     $("setup-metric-notes").textContent = String(recentState.length);
     $("setup-user-name").textContent = profile.display_name;
-    $("setup-user-id").textContent = profile.user_id;
     $("setup-user-summary").textContent = profile.profile_summary;
     renderChipRow("signal-summary", [
       `${profile.pending_signal_count} pending`,
@@ -544,7 +543,7 @@
       return;
     }
     banner.classList.remove("hidden");
-    title.textContent = profile ? `${profile.display_name} (${profile.user_id})` : userId;
+    title.textContent = profile ? profile.display_name : "Current profile";
   }
 
   async function loadOnboardingQuestionnaire() {
@@ -643,26 +642,71 @@
     return Array.from(document.querySelectorAll("#failure-reason-list input:checked")).map((node) => node.value);
   }
 
+  function setFeedbackButtonState(disabled, label) {
+    const button = $("feedback-button");
+    if (!button) return;
+    button.disabled = disabled;
+    button.textContent = label;
+  }
+
+  function setFeedbackSaveNote(message = "", error = false) {
+    const note = $("feedback-save-note");
+    if (!note) return;
+    note.textContent = message;
+    note.classList.toggle("hidden", !message);
+    note.classList.toggle("error", Boolean(message) && error);
+    note.classList.toggle("success", Boolean(message) && !error);
+  }
+
+  function resetFeedbackState({ clearFields = false } = {}) {
+    if (clearFields) {
+      if ($("actual-option")) $("actual-option").innerHTML = "";
+      $("reason-text").value = "";
+      $("reason-tags").value = "";
+      $("preference-shift-note").value = "";
+      $("context-updates").value = "";
+      document.querySelectorAll("#failure-reason-list input").forEach((node) => {
+        node.checked = false;
+      });
+    }
+    setFeedbackButtonState(false, "Save feedback");
+    setFeedbackSaveNote("");
+  }
+
+  function parseContextUpdates() {
+    const rawContextUpdates = $("context-updates").value.trim();
+    if (!rawContextUpdates) {
+      return {};
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(rawContextUpdates);
+    } catch (_) {
+      throw new Error("Context updates must be valid JSON.");
+    }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error("Context updates must be a JSON object.");
+    }
+    return parsed;
+  }
+
   function resetPredictionForm() {
     if (page !== "predict") return;
     $("user-id").value = getActiveUserId();
+    if ($("user-display-name")) {
+      const visibleName = $("predict-user-name")?.textContent || "";
+      $("user-display-name").value = visibleName === "-" ? "" : visibleName;
+    }
     $("category").value = "food";
     $("prompt").value = "Pick dinner after a tiring rainy evening.";
-    $("time_of_day").value = "night";
-    $("energy").value = "low";
-    $("weather").value = "rainy";
-    $("with").value = "alone";
-    $("mood").value = "";
+    $("time_of_day").value = "";
+    $("energy").value = "";
+    $("weather").value = "";
+    $("with").value = "";
     $("budget").value = "";
     $("urgency").value = "";
     $("prediction-mode").value = "hybrid";
-    $("reason-text").value = "";
-    $("reason-tags").value = "";
-    $("preference-shift-note").value = "";
-    $("context-updates").value = "";
-    document.querySelectorAll("#failure-reason-list input").forEach((node) => {
-      node.checked = false;
-    });
+    resetFeedbackState({ clearFields: true });
     $("option-list").innerHTML = "";
     DEFAULT_OPTIONS.forEach(createOptionRow);
     $("feedback-panel").classList.add("hidden");
@@ -674,7 +718,7 @@
   }
 
   function getContextPayload() {
-    const fields = ["time_of_day", "energy", "weather", "with", "mood", "budget", "urgency"];
+    const fields = ["time_of_day", "energy", "weather", "with", "budget", "urgency"];
     const context = {};
     fields.forEach((key) => {
       const node = $(key);
@@ -708,6 +752,7 @@
 
   function renderPrediction(prediction) {
     latestPrediction = prediction;
+    resetFeedbackState({ clearFields: true });
     $("prediction-empty").classList.add("hidden");
     $("prediction-content").classList.remove("hidden");
     $("feedback-panel").classList.remove("hidden");
@@ -734,11 +779,11 @@
     renderEvidenceList("recent-state-evidence", prediction.explanation_sections.what_recent_state_mattered, "No recent-state evidence was returned.");
     renderEvidenceList("memory-explanation-list", prediction.explanation_sections.what_memories_mattered, "No memory explanation was returned.");
     renderEvidenceList("why-others-lost-list", prediction.explanation_sections.why_other_options_lost, "No comparison evidence was returned.");
-    $("audit-confidence-label").textContent = prediction.decision_audit.confidence_label;
-    $("audit-margin").textContent = `margin vs runner-up: ${Math.round(prediction.decision_audit.margin_vs_runner_up * 100)} pts`;
-    $("audit-context").textContent = Object.entries(prediction.decision_audit.active_context || {})
+    $("audit-confidence-chip").textContent = `confidence: ${prediction.decision_audit.confidence_label}`;
+    $("audit-margin-chip").textContent = `margin: ${Math.round(prediction.decision_audit.margin_vs_runner_up * 100)} pts`;
+    $("audit-context-chip").textContent = `context: ${Object.entries(prediction.decision_audit.active_context || {})
       .map(([key, value]) => `${key}=${value}`)
-      .join(" | ") || "No active context";
+      .join(" | ") || "none"}`;
     renderEvidenceList("audit-decisive-factors", prediction.decision_audit.decisive_factors, "No decisive factors were captured.");
     renderEvidenceList("audit-watchouts", prediction.decision_audit.watchouts, "No specific watchouts were captured.");
     renderEvidenceList("audit-adaptation-signals", prediction.decision_audit.adaptation_signals, "No adaptation signals were active.");
@@ -851,16 +896,18 @@
       emptyState.classList.remove("hidden");
       workspace.classList.add("hidden");
       $("metric-user").textContent = "None";
+      if ($("user-display-name")) $("user-display-name").value = "";
+      $("user-id").value = "";
       banner.classList.add("hidden");
       return;
     }
     try {
       const profile = await fetchProfileBundle(userId);
-      $("metric-user").textContent = userId;
+      $("metric-user").textContent = profile.display_name;
       $("predict-user-name").textContent = profile.display_name;
-      $("predict-user-id").textContent = profile.user_id;
       $("predict-user-summary").textContent = profile.profile_summary;
       $("user-id").value = userId;
+      if ($("user-display-name")) $("user-display-name").value = profile.display_name;
       emptyState.classList.add("hidden");
       workspace.classList.remove("hidden");
       banner.classList.remove("hidden");
@@ -1144,25 +1191,34 @@
         return;
       }
       try {
+        setFeedbackButtonState(true, "Saving...");
+        setFeedbackSaveNote("");
         setStatus("Saving feedback...");
-        let contextUpdates = {};
-        const rawContextUpdates = $("context-updates").value.trim();
-        if (rawContextUpdates) {
-          contextUpdates = JSON.parse(rawContextUpdates);
-        }
-        await request(`/decisions/${encodeURIComponent(latestPrediction.request_id)}/feedback`, {
+        const feedback = await request(`/decisions/${encodeURIComponent(latestPrediction.request_id)}/feedback`, {
           method: "POST",
           body: JSON.stringify({
             actual_option_id: $("actual-option").value,
             reason_text: $("reason-text").value.trim() || null,
             reason_tags: csvValues($("reason-tags").value),
             failure_reasons: getSelectedFailureReasons(),
-            context_updates: contextUpdates,
+            context_updates: parseContextUpdates(),
             preference_shift_note: $("preference-shift-note").value.trim() || null,
           }),
         });
-        setStatus("Feedback saved. If the recent state needs adjustment, update it on the setup page.");
+        setFeedbackButtonState(true, "Feedback saved");
+        setFeedbackSaveNote(
+          `Saved actual choice '${feedback.actual_option_text}'. Memory and profile snapshot were updated.`,
+        );
+        setStatus("Feedback saved. Future predictions can now adapt to this choice.");
       } catch (error) {
+        if (error.message === "Feedback has already been recorded for this prediction.") {
+          setFeedbackButtonState(true, "Feedback saved");
+          setFeedbackSaveNote("Feedback was already recorded for this prediction.");
+          setStatus("Feedback was already recorded for this prediction.");
+          return;
+        }
+        setFeedbackButtonState(false, "Save feedback");
+        setFeedbackSaveNote(error.message, true);
         setStatus(error.message, true);
       }
     });

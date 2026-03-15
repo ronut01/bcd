@@ -23,6 +23,8 @@ class ReflectionService:
         request = self.repository.get_request(request_id)
         if request is None:
             raise ValueError(f"Decision request '{request_id}' was not found.")
+        if self.repository.get_feedback_by_request(request_id) is not None:
+            raise ValueError("Feedback has already been recorded for this prediction.")
 
         options = self.repository.list_options_for_request(request_id)
         option_by_id = {option.option_id: option for option in options}

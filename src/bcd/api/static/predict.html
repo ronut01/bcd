@@ -41,9 +41,8 @@
             </div>
           </div>
           <div id="predict-user-banner" class="list-card hidden">
-            <span class="mini">Active user summary</span>
+            <span class="mini">Active profile</span>
             <strong id="predict-user-name">-</strong>
-            <div class="mini" id="predict-user-id">-</div>
             <p id="predict-user-summary" class="help">User summary will appear here.</p>
           </div>
           <div class="button-row inline">
@@ -63,98 +62,115 @@
       </section>
 
       <section id="predict-workspace" class="hidden top-gap">
-        <article class="panel predict-input-shell">
-          <span class="section-tag">Step 1</span>
-          <h2>Ask a decision</h2>
-          <p class="help">Enter the question first. The prediction result opens separately so you can focus on either the input or the outcome, not both at once.</p>
-          <div class="stack top-gap">
-            <div class="grid-2">
-              <div class="field">
-                <label for="user-id">Active user ID</label>
-                <input id="user-id" readonly />
+        <div class="predict-layout">
+          <article class="panel predict-input-shell">
+            <span class="section-tag">Step 1</span>
+            <h2>Ask a decision</h2>
+            <p class="help">Enter the question first. The prediction result opens separately so you can focus on either the input or the outcome, not both at once.</p>
+            <div class="stack top-gap">
+              <div class="grid-2">
+                <div class="field">
+                  <label for="user-display-name">Active user</label>
+                  <input id="user-display-name" readonly />
+                  <input id="user-id" type="hidden" />
+                </div>
+                <div class="field">
+                  <label for="category">Category</label>
+                  <select id="category">
+                    <option value="food">food</option>
+                    <option value="entertainment">entertainment</option>
+                    <option value="study">study</option>
+                    <option value="shopping">shopping</option>
+                    <option value="custom">custom</option>
+                  </select>
+                </div>
               </div>
+
               <div class="field">
-                <label for="category">Category</label>
-                <select id="category">
-                  <option value="food">food</option>
-                  <option value="entertainment">entertainment</option>
-                  <option value="study">study</option>
-                  <option value="shopping">shopping</option>
-                  <option value="custom">custom</option>
-                </select>
+                <label for="prompt">Question or situation</label>
+                <textarea id="prompt">Pick dinner after a tiring rainy evening.</textarea>
               </div>
-            </div>
 
-            <div class="field">
-              <label for="prompt">Question or situation</label>
-              <textarea id="prompt">Pick dinner after a tiring rainy evening.</textarea>
-            </div>
+              <div class="field">
+                <label>Candidate options</label>
+                <div class="option-list" id="option-list"></div>
+                <div class="button-row inline">
+                  <button class="secondary" id="add-option-button" type="button">Add option</button>
+                  <button class="secondary" id="reset-button" type="button">Reset example</button>
+                </div>
+              </div>
 
-            <div class="field">
-              <label>Candidate options</label>
-              <div class="option-list" id="option-list"></div>
               <div class="button-row inline">
-                <button class="secondary" id="add-option-button" type="button">Add option</button>
-                <button class="secondary" id="reset-button" type="button">Reset example</button>
+                <button class="primary" id="predict-button" type="button">Run prediction</button>
               </div>
             </div>
+          </article>
 
-            <details class="soft-block">
-              <summary class="summary-trigger">Context</summary>
+          <aside class="predict-side-stack">
+            <details class="panel soft-block" open>
+              <summary class="summary-trigger">Optional context</summary>
               <div class="stack top-gap-sm">
+                <p class="help">Only fill fields that would materially change what this person is likely to choose.</p>
                 <div class="grid-2">
                   <div class="field">
                     <label for="time_of_day">Time of day</label>
                     <select id="time_of_day">
-                      <option value="">(optional)</option>
+                      <option value="" selected>(optional)</option>
                       <option value="morning">morning</option>
-                      <option value="afternoon">afternoon</option>
                       <option value="evening">evening</option>
-                      <option value="night" selected>night</option>
+                      <option value="night">night</option>
                     </select>
                   </div>
                   <div class="field">
-                    <label for="energy">Energy</label>
+                    <label for="energy">Current energy</label>
                     <select id="energy">
-                      <option value="">(optional)</option>
-                      <option value="low" selected>low</option>
-                      <option value="medium">medium</option>
+                      <option value="" selected>(optional)</option>
+                      <option value="low">low</option>
                       <option value="high">high</option>
                     </select>
                   </div>
                 </div>
 
-                <div class="grid-2">
-                  <div class="field">
-                    <label for="weather">Weather</label>
-                    <input id="weather" value="rainy" />
-                  </div>
-                  <div class="field">
-                    <label for="with">Who is the user with?</label>
-                    <input id="with" value="alone" />
-                  </div>
+                <div class="field">
+                  <label for="weather">Weather conditions</label>
+                  <select id="weather">
+                    <option value="" selected>(optional)</option>
+                    <option value="rainy">rainy</option>
+                    <option value="cold">cold</option>
+                    <option value="hot">hot</option>
+                    <option value="sunny">sunny</option>
+                  </select>
                 </div>
-
-                <div class="grid-3">
-                  <div class="field">
-                    <label for="mood">Mood</label>
-                    <input id="mood" placeholder="optional" />
-                  </div>
-                  <div class="field">
-                    <label for="budget">Budget sensitivity</label>
-                    <input id="budget" placeholder="optional" />
-                  </div>
-                  <div class="field">
-                    <label for="urgency">Urgency</label>
-                    <input id="urgency" placeholder="optional" />
-                  </div>
+                <div class="field">
+                  <label for="with">Social setting</label>
+                  <select id="with">
+                    <option value="" selected>(optional)</option>
+                    <option value="alone">alone</option>
+                    <option value="partner">with partner</option>
+                    <option value="friends">with friends</option>
+                    <option value="family">with family</option>
+                  </select>
                 </div>
-
+                <div class="field">
+                  <label for="budget">Budget sensitivity</label>
+                  <select id="budget">
+                    <option value="" selected>(optional)</option>
+                    <option value="tight">tight</option>
+                    <option value="medium">medium</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="urgency">Time pressure</label>
+                  <select id="urgency">
+                    <option value="" selected>(optional)</option>
+                    <option value="high">high</option>
+                  </select>
+                </div>
               </div>
             </details>
 
-            <details class="soft-block">
-              <summary class="summary-trigger">Model settings</summary>
+            <details class="panel soft-block">
+              <summary class="summary-trigger">Advanced model settings</summary>
               <div class="stack top-gap-sm">
                 <div class="field">
                   <label for="prediction-mode">Prediction mode</label>
@@ -168,28 +184,22 @@
                   <label for="llm-api-key">LLM API key</label>
                   <input id="llm-api-key" type="password" placeholder="sk-..." />
                 </div>
-                <div class="grid-2">
-                  <div class="field">
-                    <label for="llm-base-url">Base URL</label>
-                    <input id="llm-base-url" value="https://api.openai.com/v1" />
-                  </div>
-                  <div class="field">
-                    <label for="llm-model">Model</label>
-                    <input id="llm-model" value="gpt-4.1-mini" />
-                  </div>
+                <div class="field">
+                  <label for="llm-base-url">Base URL</label>
+                  <input id="llm-base-url" value="https://api.openai.com/v1" />
+                </div>
+                <div class="field">
+                  <label for="llm-model">Model</label>
+                  <input id="llm-model" value="gpt-4.1-mini" />
                 </div>
                 <div class="button-row inline">
-                  <button class="secondary" id="save-llm-settings-button" type="button">Save LLM settings</button>
-                  <button class="secondary" id="clear-llm-settings-button" type="button">Clear LLM settings</button>
+                  <button class="secondary" id="save-llm-settings-button" type="button">Save</button>
+                  <button class="secondary" id="clear-llm-settings-button" type="button">Clear</button>
                 </div>
               </div>
             </details>
-
-            <div class="button-row inline">
-              <button class="primary" id="predict-button" type="button">Run prediction</button>
-            </div>
-          </div>
-        </article>
+          </aside>
+        </div>
       </section>
 
       <div id="prediction-modal" class="modal-overlay hidden">
@@ -220,23 +230,22 @@
             <div id="llm-warning" class="status error hidden"></div>
 
             <div class="list-card">
-              <h3>Top choice summary</h3>
+              <h3>Prediction summary</h3>
               <p class="help" id="prediction-explanation"></p>
+              <div class="chip-row top-gap-sm">
+                <span class="chip" id="audit-confidence-chip">confidence: -</span>
+                <span class="chip" id="audit-margin-chip">margin: -</span>
+                <span class="chip" id="audit-context-chip">context: -</span>
+              </div>
             </div>
 
             <div class="list-card">
-              <h3>Decision audit</h3>
-              <div class="audit-grid top-gap-sm">
-                <div class="audit-card">
-                  <span class="mini">Confidence</span>
-                  <strong id="audit-confidence-label">-</strong>
-                  <div class="mini" id="audit-margin">-</div>
-                </div>
-                <div class="audit-card">
-                  <span class="mini">Active context</span>
-                  <div class="mini" id="audit-context">-</div>
-                </div>
-              </div>
+              <h3>Ranked options</h3>
+              <div class="rank-list top-gap-sm" id="rank-list"></div>
+            </div>
+
+            <details class="list-card compact-details">
+              <summary class="summary-trigger">Decision reasoning</summary>
               <div class="split-cards top-gap-sm">
                 <section>
                   <h3>Decisive factors</h3>
@@ -251,15 +260,6 @@
                 <h3>Adaptation signals</h3>
                 <div class="evidence-list top-gap-sm" id="audit-adaptation-signals"></div>
               </section>
-            </div>
-
-            <div class="list-card">
-              <h3>Ranked options</h3>
-              <div class="rank-list top-gap-sm" id="rank-list"></div>
-            </div>
-
-            <details class="list-card compact-details">
-              <summary class="summary-trigger">Why this prediction happened</summary>
               <div class="split-cards top-gap-sm">
                 <section>
                   <h3>Why this option</h3>
@@ -320,6 +320,7 @@
                   <button class="primary" id="feedback-button" type="button">Save feedback</button>
                   <a class="button-link secondary" href="/app/setup">Adjust profile or recent state</a>
                 </div>
+                <div class="inline-note hidden" id="feedback-save-note"></div>
               </div>
             </article>
           </div>

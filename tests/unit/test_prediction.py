@@ -59,7 +59,9 @@ def test_recent_state_note_can_shift_the_top_prediction(configured_env):
         )
         profile_service.add_recent_state_note(
             "sample-alex",
-            RecentStateNoteInput(note_text="Today the user specifically wants a greasy burger right now."),
+            RecentStateNoteInput(
+                note_text="Today the user specifically wants a greasy burger right now and does not want warm noodle soup."
+            ),
         )
         shifted_prediction = DecisionService(session, settings).predict(
             DecisionPredictionInput(
@@ -131,4 +133,97 @@ def test_feedback_context_updates_carry_into_the_next_prediction(configured_env)
     assert any(
         component.name == "adaptive_context_alignment"
         for component in next_prediction.ranked_options[0].component_scores
+    )
+
+
+def test_social_context_beyond_friends_changes_the_prediction(configured_env):
+    settings = get_settings()
+    init_db(settings)
+
+    with session_scope(settings.database_url) as session:
+        ProfileService(session, settings).bootstrap_sample_profile()
+        decision_service = DecisionService(session, settings)
+
+        neutral_prediction = decision_service.predict(
+            DecisionPredictionInput(
+                user_id="sample-alex",
+                prompt="Pick dinner for tonight.",
+                category="food",
+                context={},
+                options=[
+                    DecisionOptionInput(option_text="Solo noodle bowl"),
+                    DecisionOptionInput(option_text="Cozy shared pasta"),
+                ],
+            )
+        )
+        partner_prediction = decision_service.predict(
+            DecisionPredictionInput(
+                user_id="sample-alex",
+                prompt="Pick dinner for tonight.",
+                category="food",
+                context={"with": "partner"},
+                options=[
+                    DecisionOptionInput(option_text="Solo noodle bowl"),
+                    DecisionOptionInput(option_text="Cozy shared pasta"),
+                ],
+            )
+        )
+
+    assert neutral_prediction.predicted_option_text in {"Solo noodle bowl", "Cozy shared pasta"}
+    assert partner_prediction.predicted_option_text == "Cozy shared pasta"
+    assert any(
+        component.name == "context_compatibility" and component.weighted_score > 0
+        for component in partner_prediction.ranked_options[0].component_scores
+    )
+
+
+def test_urgency_now_uses_time_pressure_preferences(configured_env):
+    settings = get_settings()
+    init_db(settings)
+
+    with session_scope(settings.database_url) as session:
+        ProfileService(session, settings).bootstrap_sample_profile()
+        prediction = DecisionService(session, settings).predict(
+            DecisionPredictionInput(
+                user_id="sample-alex",
+                prompt="Choose a study plan for an urgent deadline.",
+                category="study",
+                context={"urgency": "high"},
+                options=[
+                    DecisionOptionInput(option_text="Simple finishable checklist"),
+                    DecisionOptionInput(option_text="Ambitious open-ended research sprint"),
+                ],
+            )
+        )
+
+    assert prediction.predicted_option_text == "Simple finishable checklist"
+    assert any(
+        component.name == "context_compatibility" and component.weighted_score > 0
+        for component in prediction.ranked_options[0].component_scores
+    )
+
+
+def test_time_of_day_now_uses_profile_context_preferences(configured_env):
+    settings = get_settings()
+    init_db(settings)
+
+    with session_scope(settings.database_url) as session:
+        ProfileService(session, settings).bootstrap_sample_profile()
+        prediction = DecisionService(session, settings).predict(
+            DecisionPredictionInput(
+                user_id="sample-alex",
+                prompt="Pick something to watch late tonight.",
+                category="entertainment",
+                context={"time_of_day": "night"},
+                options=[
+                    DecisionOptionInput(option_text="A cozy short drama"),
+                    DecisionOptionInput(option_text="A bright morning travel show"),
+                ],
+            )
+        )
+
+    assert prediction.predicted_option_text == "A cozy short drama"
+    assert any(
+        component.name == "context_compatibility" and component.weighted_score > 0
+        for component in prediction.ranked_options[0].component_scores
     )

@@ -59,6 +59,21 @@ def _build_seed_summary(event: dict, chosen_text: str) -> str:
     return summary
 
 
+def _merge_nested_preferences(current: dict, bundled: dict) -> dict:
+    merged = dict(current)
+    for key, bundled_value in bundled.items():
+        current_value = merged.get(key)
+        if isinstance(current_value, dict) and isinstance(bundled_value, dict):
+            merged[key] = _merge_nested_preferences(current_value, bundled_value)
+            continue
+        if isinstance(current_value, list) and isinstance(bundled_value, list):
+            merged[key] = list(dict.fromkeys(current_value + bundled_value))
+            continue
+        if current_value in (None, "", [], {}):
+            merged[key] = bundled_value
+    return merged
+
+
 def _is_meaningful_snapshot_tag(tag: str) -> bool:
     stop_tags = {"time", "of", "day", "with", "energy", "weather", "budget", "mood", "a", "the"}
     if tag in stop_tags:
@@ -110,18 +125,42 @@ class ProfileService:
         sample_profile = load_json(self.settings.sample_profile_path)
         existing = self.repository.get_user_profile(sample_profile["user_id"])
         if existing:
-            existing_signals = self.repository.list_profile_signals(existing.user_id, limit=10)
-            if not existing_signals:
-                self.repository.add_all(
-                    self._build_profile_signal_rows(
-                        user_id=existing.user_id,
-                        personality_signals=existing.personality_signals_json,
-                        long_term_preferences=existing.long_term_preferences_json,
-                        source_type="sample_profile",
-                        evidence_prefix="Backfilled from the bundled sample profile.",
-                        status="accepted",
-                    )
-                )
+            merged_personality = _merge_nested_preferences(
+                existing.personality_signals_json,
+                sample_profile["personality_signals"],
+            )
+            merged_preferences = _merge_nested_preferences(
+                existing.long_term_preferences_json,
+                sample_profile["long_term_preferences"],
+            )
+            if (
+                merged_personality != existing.personality_signals_json
+                or merged_preferences != existing.long_term_preferences_json
+            ):
+                existing.personality_signals_json = merged_personality
+                existing.long_term_preferences_json = merged_preferences
+                existing.updated_at = utc_now()
+                self.session.add(existing)
+                self.session.flush()
+                self.session.refresh(existing)
+
+            existing_signals = self.repository.list_profile_signals(existing.user_id, limit=500)
+            desired_signals = self._build_profile_signal_rows(
+                user_id=existing.user_id,
+                personality_signals=merged_personality,
+                long_term_preferences=merged_preferences,
+                source_type="sample_profile",
+                evidence_prefix="Backfilled from the bundled sample profile.",
+                status="accepted",
+            )
+            existing_signal_keys = {(signal.signal_kind, signal.signal_name) for signal in existing_signals}
+            missing_signals = [
+                signal
+                for signal in desired_signals
+                if (signal.signal_kind, signal.signal_name) not in existing_signal_keys
+            ]
+            if missing_signals:
+                self.repository.add_all(missing_signals)
             bundle = self.get_profile_bundle(existing.user_id)
             self.ensure_profile_card(existing.user_id, bundle=bundle)
             return self.get_profile_bundle(existing.user_id)

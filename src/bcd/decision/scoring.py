@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Protocol
 
 from bcd.memory.schemas import RetrievedMemory
@@ -15,6 +16,17 @@ LOW_ENERGY_PENALTIES = {"complex", "late", "adventure", "exploration", "long", "
 RAINY_WEATHER_PENALTIES = {"outdoor", "walk", "picnic", "street", "park"}
 LOW_BUDGET_PENALTIES = {"premium", "luxury", "expensive", "exclusive"}
 HIGH_URGENCY_BONUSES = {"quick", "easy", "simple", "structured", "checklist", "fast", "near", "familiar"}
+HIGH_URGENCY_PENALTIES = {"open-ended", "chaotic", "ambitious", "random", "unrelated", "long", "complex"}
+WEATHER_CONTEXT_BONUSES = {
+    "rainy": {"indoor", "warm", "cozy", "close", "soup", "noodle"},
+    "cold": {"warm", "hot", "soup", "stew", "tea", "indoor", "cozy"},
+    "hot": {"cold", "iced", "fresh", "light", "salad"},
+    "sunny": {"outdoor", "picnic", "walk", "fresh"},
+}
+WEATHER_CONTEXT_PENALTIES = {
+    "cold": {"iced", "cold", "frozen"},
+    "hot": {"heavy", "stew", "hot"},
+}
 TEMPORARY_OVERRIDE_TERMS = {"today", "currently", "right", "now", "this", "time", "for", "now"}
 NEGATION_TERMS = {"avoid", "not", "dont", "don't", "skip", "no"}
 
@@ -211,13 +223,7 @@ class ContextCompatibilityComponent:
         supporting = []
         counter = []
 
-        derived_context_keys = []
-        if scoring_context.context.get("energy"):
-            derived_context_keys.append(f"energy_{str(scoring_context.context['energy']).lower()}")
-        if scoring_context.context.get("with") and str(scoring_context.context["with"]).lower() == "friends":
-            derived_context_keys.append("with_friends")
-        if scoring_context.context.get("budget") and str(scoring_context.context["budget"]).lower() in {"low", "tight", "medium"}:
-            derived_context_keys.append("budget_sensitive")
+        derived_context_keys = _derive_context_keys(scoring_context.context)
 
         for key in derived_context_keys:
             preferred_context_tokens = {token.lower() for token in context_preferences.get(key, [])}
@@ -227,12 +233,37 @@ class ContextCompatibilityComponent:
                 supporting.append(f"The option matches the user's '{key}' context preference.")
 
         contradiction_penalty = 0.0
+        situational_bonus = 0.0
         if str(scoring_context.context.get("energy", "")).lower() == "low":
             contradiction_penalty += overlap_count(option_tokens, LOW_ENERGY_PENALTIES) * 0.65
-        if str(scoring_context.context.get("weather", "")).lower() == "rainy":
+        weather_value = _normalize_context_value(scoring_context.context.get("weather"))
+        if weather_value == "rainy":
             contradiction_penalty += overlap_count(option_tokens, RAINY_WEATHER_PENALTIES) * 0.5
         if str(scoring_context.context.get("budget", "")).lower() in {"low", "tight"}:
             contradiction_penalty += overlap_count(option_tokens, LOW_BUDGET_PENALTIES) * 0.55
+        if weather_value in WEATHER_CONTEXT_BONUSES:
+            weather_bonus = overlap_count(option_tokens, WEATHER_CONTEXT_BONUSES[weather_value]) * 0.45
+            situational_bonus += weather_bonus
+            if weather_bonus:
+                supporting.append(f"The option fits the current '{weather_value}' weather context.")
+        if weather_value in WEATHER_CONTEXT_PENALTIES:
+            weather_penalty = overlap_count(option_tokens, WEATHER_CONTEXT_PENALTIES[weather_value]) * 0.45
+            contradiction_penalty += weather_penalty
+            if weather_penalty:
+                counter.append(f"The option clashes with the current '{weather_value}' weather context.")
+
+        urgency_value = _normalize_context_value(scoring_context.context.get("urgency"))
+        if urgency_value in {"high", "urgent", "tight"}:
+            urgency_bonus = overlap_count(option_tokens, HIGH_URGENCY_BONUSES) * 0.45
+            urgency_penalty = overlap_count(option_tokens, HIGH_URGENCY_PENALTIES) * 0.4
+            situational_bonus += urgency_bonus
+            contradiction_penalty += urgency_penalty
+            if urgency_bonus:
+                supporting.append("The option looks easier to finish under time pressure.")
+            if urgency_penalty:
+                counter.append("The option looks too open-ended for the current time pressure.")
+
+        raw_score += situational_bonus
 
         if contradiction_penalty:
             raw_score -= contradiction_penalty
@@ -260,19 +291,20 @@ class RecentStateInfluenceComponent:
         counter = []
 
         for note in scoring_context.recent_state_notes:
-            lowered_note = note.lower()
-            note_tokens = set(tokenize(note))
-            overlap = overlap_count(option_tokens, note_tokens)
-            exact_option_mention = option.option_text.lower() in lowered_note
-            if not overlap and not exact_option_mention:
-                continue
-            multiplier = 1.3 if note_tokens & TEMPORARY_OVERRIDE_TERMS else 1.0
-            if note_tokens & NEGATION_TERMS:
-                raw_score -= (overlap * 0.7 + (2.25 if exact_option_mention else 0.0)) * multiplier
-                counter.append(f"Recent state note pushes away from this option: '{note}'.")
-            else:
-                raw_score += (overlap * 0.85 + (4.5 if exact_option_mention else 0.0)) * multiplier
-                supporting.append(f"Recent state note supports this option: '{note}'.")
+            for clause in _split_recent_state_clauses(note):
+                lowered_clause = clause.lower()
+                note_tokens = set(tokenize(clause))
+                overlap = overlap_count(option_tokens, note_tokens)
+                exact_option_mention = option.option_text.lower() in lowered_clause
+                if not overlap and not exact_option_mention:
+                    continue
+                multiplier = 1.3 if note_tokens & TEMPORARY_OVERRIDE_TERMS else 1.0
+                if note_tokens & NEGATION_TERMS:
+                    raw_score -= (overlap * 0.7 + (2.25 if exact_option_mention else 0.0)) * multiplier
+                    counter.append(f"Recent state note pushes away from this option: '{clause}'.")
+                else:
+                    raw_score += (overlap * 0.85 + (4.5 if exact_option_mention else 0.0)) * multiplier
+                    supporting.append(f"Recent state note supports this option: '{clause}'.")
 
         reason = "Recent temporary state had a direct effect on this option." if raw_score else "Recent manual or feedback-derived state did not strongly target this option."
         return _component_result(
@@ -434,6 +466,53 @@ def default_scoring_pipeline() -> ScoringPipeline:
 
 def _option_tokens(option: DecisionOption) -> set[str]:
     return set(tokenize(option.option_text) + tokenize(flatten_to_text(option.option_metadata_json)))
+
+
+def _split_recent_state_clauses(note: str) -> list[str]:
+    clauses = [part.strip() for part in re.split(r"[.;]|\band\b|\bbut\b", note, flags=re.IGNORECASE)]
+    return [clause for clause in clauses if clause]
+
+
+def _normalize_context_value(value: object) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _derive_context_keys(context: dict) -> list[str]:
+    derived_context_keys: list[str] = []
+    energy_value = _normalize_context_value(context.get("energy"))
+    if energy_value:
+        derived_context_keys.append(f"energy_{energy_value}")
+
+    time_of_day_value = _normalize_context_value(context.get("time_of_day"))
+    if time_of_day_value:
+        derived_context_keys.append(f"time_of_day_{time_of_day_value}")
+
+    social_value = _normalize_context_value(context.get("with"))
+    if social_value:
+        if social_value in {"friend", "friends", "group"}:
+            derived_context_keys.append("with_friends")
+        if social_value in {"alone", "solo", "myself"}:
+            derived_context_keys.append("with_alone")
+        if social_value in {"partner", "date", "spouse"}:
+            derived_context_keys.append("with_partner")
+        if social_value in {"family", "parents", "kids", "children"}:
+            derived_context_keys.append("with_family")
+        derived_context_keys.append(f"with_{social_value.removeprefix('with_')}")
+
+    budget_value = _normalize_context_value(context.get("budget"))
+    if budget_value in {"low", "tight", "medium"}:
+        derived_context_keys.append("budget_sensitive")
+
+    weather_value = _normalize_context_value(context.get("weather"))
+    if weather_value:
+        derived_context_keys.append(f"weather_{weather_value}")
+
+    urgency_value = _normalize_context_value(context.get("urgency"))
+    deadline_value = _normalize_context_value(context.get("deadline"))
+    if urgency_value in {"high", "urgent", "tight"} or deadline_value in {"tonight", "soon", "immediate"}:
+        derived_context_keys.append("time_pressure")
+
+    return list(dict.fromkeys(derived_context_keys))
 
 
 def _stable_profile_confidence(profile_signals: list[ProfileSignalRead]) -> float:

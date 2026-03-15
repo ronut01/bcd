@@ -28,8 +28,18 @@
     "context_preferences": {
       "energy_low": ["warm", "familiar", "easy", "cozy", "close"],
       "energy_high": ["explore", "active", "ambitious"],
+      "with_alone": ["quiet", "familiar", "easy", "cozy"],
+      "with_partner": ["cozy", "shared", "comfortable", "nice"],
+      "with_family": ["shareable", "familiar", "practical", "group"],
       "with_friends": ["shareable", "social", "group", "active"],
-      "budget_sensitive": ["cheap", "affordable", "practical", "value"]
+      "budget_sensitive": ["cheap", "affordable", "practical", "value"],
+      "time_pressure": ["simple", "finishable", "clear", "structured", "quick"],
+      "time_of_day_morning": ["fresh", "light", "quick", "clear"],
+      "time_of_day_evening": ["cozy", "familiar", "character", "shared"],
+      "time_of_day_night": ["warm", "cozy", "familiar", "easy", "short"],
+      "weather_rainy": ["indoor", "warm", "cozy", "close"],
+      "weather_cold": ["warm", "hot", "indoor", "soup"],
+      "weather_hot": ["cold", "fresh", "light", "iced"]
     }
   },
   "onboarding_answers": [

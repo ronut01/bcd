@@ -98,6 +98,19 @@ def test_api_happy_path(configured_env):
     )
     assert feedback_response.status_code == 200
     assert feedback_response.json()["reflection_id"]
+    duplicate_feedback_response = client.post(
+        f"/decisions/{prediction_payload['request_id']}/feedback",
+        json={
+            "actual_option_id": prediction_payload["predicted_option_id"],
+            "reason_text": "Wanted something warm and easy.",
+            "reason_tags": ["warm", "easy"],
+            "failure_reasons": ["context_missing"],
+            "context_updates": {"energy": "very_low"},
+            "preference_shift_note": "Rain made comfort more important.",
+        },
+    )
+    assert duplicate_feedback_response.status_code == 400
+    assert "already been recorded" in duplicate_feedback_response.json()["detail"]
 
     history_response = client.get(f"/users/{user_id}/history")
     memories_response = client.get(f"/users/{user_id}/memories")
