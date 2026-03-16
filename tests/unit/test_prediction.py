@@ -43,6 +43,8 @@ def test_predict_returns_valid_option_and_normalized_confidence(configured_env):
     assert prediction.agent_workflow.reflection_agent.agent_name == "Reflection Agent"
     assert prediction.top_choice_influence.option_id == prediction.predicted_option_id
     assert prediction.option_influences[0].option_id == prediction.predicted_option_id
+    assert prediction.agent_agreement.summary
+    assert prediction.agent_agreement.signals
 
 
 def test_recent_state_note_can_shift_the_top_prediction(configured_env):
@@ -91,6 +93,8 @@ def test_recent_state_note_can_shift_the_top_prediction(configured_env):
     )
     assert shifted_prediction.agent_workflow.recent_state_agent.observations
     assert any("Recent state note supports this option" in item for item in shifted_prediction.option_influences[0].why_choose)
+    assert shifted_prediction.agent_agreement.supporting_agents
+    assert shifted_prediction.agent_agreement.opposing_agents
 
 
 def test_feedback_context_updates_carry_into_the_next_prediction(configured_env):

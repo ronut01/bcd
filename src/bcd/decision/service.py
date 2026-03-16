@@ -12,6 +12,8 @@ from sqlmodel import Session
 from bcd.config import Settings, get_settings
 from bcd.decision.schemas import (
     AgentBrief,
+    AgentAgreementSignal,
+    AgentAgreementSummary,
     AgentInfluenceBreakdown,
     AgentOptionAssessment,
     AgentWorkflowTrace,
@@ -310,6 +312,10 @@ class DecisionService:
             effective_context=effective_context,
         )
         top_choice_influence = option_influences[0].influence
+        agent_agreement = self._build_agent_agreement(
+            top_assessment=option_influences[0],
+            agent_workflow=agent_workflow,
+        )
         explanation_sections = self._build_explanation_sections(
             ranked=ranked,
             retrieved_memories=retrieved_memories,
@@ -317,6 +323,7 @@ class DecisionService:
             llm_note=llm_result.explanation if llm_result else llm_error,
             agent_workflow=agent_workflow,
             option_influences=option_influences,
+            agent_agreement=agent_agreement,
         )
         decision_audit = self._build_decision_audit(
             ranked=ranked,
@@ -385,6 +392,7 @@ class DecisionService:
             agent_workflow=agent_workflow,
             top_choice_influence=top_choice_influence,
             option_influences=option_influences,
+            agent_agreement=agent_agreement,
             explanation_sections=explanation_sections,
             decision_audit=decision_audit,
             created_at=prediction.created_at,
@@ -846,6 +854,96 @@ class DecisionService:
             )
         return assessments
 
+    @staticmethod
+    def _stance_from_score(score: float) -> tuple[str, float]:
+        magnitude = abs(score)
+        if magnitude < 0.12:
+            return "neutral", magnitude
+        if score > 0:
+            return "support", magnitude
+        return "oppose", magnitude
+
+    def _build_agent_agreement(
+        self,
+        top_assessment: AgentOptionAssessment,
+        agent_workflow: AgentWorkflowTrace,
+    ) -> AgentAgreementSummary:
+        influence = top_assessment.influence
+        raw_signals = [
+            ("Profile Agent", influence.stable_profile, agent_workflow.profile_agent.conclusion),
+            ("Recent State Agent", influence.recent_state, agent_workflow.recent_state_agent.conclusion),
+            ("Memory Agent", influence.memory, agent_workflow.memory_agent.conclusion),
+            ("Choice Reasoning Agent", sum([
+                influence.stable_profile,
+                influence.recent_state,
+                influence.memory,
+                influence.context,
+                influence.llm,
+            ]), agent_workflow.choice_reasoning_agent.conclusion),
+            ("Reflection Agent", influence.recent_state, agent_workflow.reflection_agent.conclusion),
+        ]
+        if abs(influence.context) >= 0.12:
+            raw_signals.append(("Context Signal", influence.context, "Current situational context materially affected the top choice."))
+        if abs(influence.llm) >= 0.12:
+            raw_signals.append(("LLM Tie-Breaker", influence.llm, "LLM ranking added a meaningful extra push on the final ordering."))
+
+        signals: list[AgentAgreementSignal] = []
+        supporting_agents: list[str] = []
+        opposing_agents: list[str] = []
+        neutral_agents: list[str] = []
+        for agent_name, score, rationale in raw_signals:
+            stance, strength = self._stance_from_score(score)
+            signal = AgentAgreementSignal(
+                agent_name=agent_name,
+                stance=stance,  # type: ignore[arg-type]
+                strength=round(strength, 4),
+                rationale=rationale,
+            )
+            signals.append(signal)
+            if stance == "support":
+                supporting_agents.append(agent_name)
+            elif stance == "oppose":
+                opposing_agents.append(agent_name)
+            else:
+                neutral_agents.append(agent_name)
+
+        support_count = len(supporting_agents)
+        oppose_count = len(opposing_agents)
+        if support_count >= 4 and oppose_count == 0:
+            overall_label = "strong_agreement"
+        elif support_count >= 3 and oppose_count <= 1:
+            overall_label = "partial_agreement"
+        elif oppose_count >= 2:
+            overall_label = "mixed"
+        else:
+            overall_label = "fragile"
+
+        if overall_label == "strong_agreement":
+            summary = (
+                f"Most agents aligned behind '{top_assessment.option_text}', so the final prediction reflects broad agreement."
+            )
+        elif overall_label == "partial_agreement":
+            summary = (
+                f"Several agents supported '{top_assessment.option_text}', though not every signal pointed in the same direction."
+            )
+        elif overall_label == "mixed":
+            summary = (
+                f"The final pick '{top_assessment.option_text}' won despite meaningful disagreement between agents."
+            )
+        else:
+            summary = (
+                f"The final pick '{top_assessment.option_text}' is fragile because agent support is limited or weak."
+            )
+
+        return AgentAgreementSummary(
+            overall_label=overall_label,  # type: ignore[arg-type]
+            summary=summary,
+            supporting_agents=supporting_agents,
+            opposing_agents=opposing_agents,
+            neutral_agents=neutral_agents,
+            signals=signals,
+        )
+
     def _build_explanation_sections(
         self,
         ranked: list[_ResolvedOptionScore],
@@ -854,6 +952,7 @@ class DecisionService:
         llm_note: str | None,
         agent_workflow: AgentWorkflowTrace,
         option_influences: list[AgentOptionAssessment],
+        agent_agreement: AgentAgreementSummary,
     ) -> ExplanationSections:
         top = ranked[0]
         runner_up = ranked[1] if len(ranked) > 1 else None
@@ -886,7 +985,7 @@ class DecisionService:
         return ExplanationSections(
             top_choice_summary=(
                 f"{agent_workflow.profile_agent.conclusion} {agent_workflow.recent_state_agent.conclusion} "
-                f"{agent_workflow.memory_agent.conclusion} That makes '{top.scored_option.option.option_text}' feel like "
+                f"{agent_workflow.memory_agent.conclusion} {agent_agreement.summary} That makes '{top.scored_option.option.option_text}' feel like "
                 "the most natural choice for this person right now."
             ),
             why_this_option=top_assessment.why_choose[:4] or [top.scored_option.reason_summary],

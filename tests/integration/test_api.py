@@ -87,6 +87,8 @@ def test_api_happy_path(configured_env):
     assert prediction_payload["agent_workflow"]["profile_agent"]["agent_name"] == "Profile Agent"
     assert prediction_payload["top_choice_influence"]["option_id"] == prediction_payload["predicted_option_id"]
     assert prediction_payload["option_influences"][0]["influence"]["stable_profile"] is not None
+    assert prediction_payload["agent_agreement"]["summary"]
+    assert len(prediction_payload["agent_agreement"]["signals"]) >= 1
     suggestion_response = client.post(
         "/decisions/suggest-options",
         json={

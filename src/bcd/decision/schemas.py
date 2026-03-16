@@ -52,6 +52,22 @@ class AgentWorkflowTrace(BaseModel):
     reflection_agent: AgentBrief
 
 
+class AgentAgreementSignal(BaseModel):
+    agent_name: str
+    stance: Literal["support", "oppose", "mixed", "neutral"]
+    strength: float = 0.0
+    rationale: str
+
+
+class AgentAgreementSummary(BaseModel):
+    overall_label: Literal["strong_agreement", "partial_agreement", "mixed", "fragile"]
+    summary: str
+    supporting_agents: list[str] = Field(default_factory=list)
+    opposing_agents: list[str] = Field(default_factory=list)
+    neutral_agents: list[str] = Field(default_factory=list)
+    signals: list[AgentAgreementSignal] = Field(default_factory=list)
+
+
 class ExplanationSections(BaseModel):
     top_choice_summary: str
     why_this_option: list[str] = Field(default_factory=list)
@@ -143,6 +159,7 @@ class PredictionResponse(BaseModel):
     agent_workflow: AgentWorkflowTrace
     top_choice_influence: AgentInfluenceBreakdown
     option_influences: list[AgentOptionAssessment] = Field(default_factory=list)
+    agent_agreement: AgentAgreementSummary
     explanation_sections: ExplanationSections
     decision_audit: DecisionAudit
     created_at: datetime

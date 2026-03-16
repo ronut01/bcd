@@ -336,6 +336,46 @@
     });
   }
 
+  function renderAgentAgreement(agreement) {
+    const summary = $("agent-agreement-summary");
+    const chips = $("agent-agreement-chips");
+    const list = $("agent-agreement-list");
+    if (!summary || !chips || !list) return;
+    if (!agreement) {
+      summary.textContent = "No agreement summary was returned.";
+      chips.innerHTML = "";
+      list.innerHTML = `<div class="signal-item"><div class="mini">No agreement signals were returned.</div></div>`;
+      return;
+    }
+    summary.textContent = agreement.summary;
+    chips.innerHTML = "";
+    [
+      `label: ${agreement.overall_label.replaceAll("_", " ")}`,
+      `support: ${(agreement.supporting_agents || []).length}`,
+      `oppose: ${(agreement.opposing_agents || []).length}`,
+      `neutral: ${(agreement.neutral_agents || []).length}`,
+    ].forEach((item) => {
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.textContent = item;
+      chips.appendChild(chip);
+    });
+    list.innerHTML = "";
+    (agreement.signals || []).forEach((signal) => {
+      const node = document.createElement("div");
+      node.className = "signal-item";
+      node.innerHTML = `
+        <strong>${escapeHtml(signal.agent_name)}</strong>
+        <div class="mini">stance: ${escapeHtml(signal.stance)} | strength: ${formatSignedScore(signal.strength)}</div>
+        <div class="mini top-gap-sm">${escapeHtml(signal.rationale)}</div>
+      `;
+      list.appendChild(node);
+    });
+    if (!(agreement.signals || []).length) {
+      list.innerHTML = `<div class="signal-item"><div class="mini">No agreement signals were returned.</div></div>`;
+    }
+  }
+
   function renderModelUpdate(feedback) {
     const summary = $("model-update-summary");
     const panel = $("model-update-panel");
@@ -1032,6 +1072,7 @@
     renderEvidenceList("audit-adaptation-signals", prediction.decision_audit.adaptation_signals, "No adaptation signals were active.");
     renderAgentWorkflow(prediction.agent_workflow);
     renderInfluenceList("top-choice-influence-list", prediction.top_choice_influence, "No influence breakdown was returned.");
+    renderAgentAgreement(prediction.agent_agreement);
 
     const rankList = $("rank-list");
     rankList.innerHTML = "";
