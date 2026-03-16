@@ -275,6 +275,86 @@
     });
   }
 
+  function formatInfluenceLabel(key) {
+    return key.replaceAll("_", " ");
+  }
+
+  function formatSignedScore(value) {
+    const rounded = Number(value || 0).toFixed(2);
+    return value > 0 ? `+${rounded}` : rounded;
+  }
+
+  function renderAgentWorkflow(workflow) {
+    const container = $("agent-workflow-list");
+    if (!container) return;
+    container.innerHTML = "";
+    if (!workflow) {
+      container.innerHTML = `<div class="signal-item"><div class="mini">No agent workflow details were returned.</div></div>`;
+      return;
+    }
+    [
+      workflow.profile_agent,
+      workflow.recent_state_agent,
+      workflow.memory_agent,
+      workflow.choice_reasoning_agent,
+      workflow.reflection_agent,
+    ].forEach((agent) => {
+      const node = document.createElement("div");
+      node.className = "signal-item";
+      node.innerHTML = `
+        <strong>${escapeHtml(agent.agent_name)}</strong>
+        <div class="mini">${escapeHtml(agent.focus)}</div>
+        <div class="mini top-gap-sm">${escapeHtml(agent.conclusion)}</div>
+        <div class="mini top-gap-sm">${escapeHtml((agent.observations || []).join(" | ") || "No observations captured.")}</div>
+      `;
+      container.appendChild(node);
+    });
+  }
+
+  function renderInfluenceList(containerId, influence, emptyMessage) {
+    const container = $(containerId);
+    if (!container) return;
+    container.innerHTML = "";
+    if (!influence) {
+      container.innerHTML = `<div class="signal-item"><div class="mini">${escapeHtml(emptyMessage)}</div></div>`;
+      return;
+    }
+    ["stable_profile", "recent_state", "memory", "context", "llm"].forEach((key) => {
+      const node = document.createElement("div");
+      node.className = "signal-item";
+      node.innerHTML = `
+        <strong>${escapeHtml(formatInfluenceLabel(key))}</strong>
+        <div class="mini">score: ${formatSignedScore(influence[key] || 0)}</div>
+      `;
+      container.appendChild(node);
+    });
+    (influence.dominant_signals || []).forEach((item) => {
+      const node = document.createElement("div");
+      node.className = "signal-item";
+      node.innerHTML = `<div class="mini">${escapeHtml(item)}</div>`;
+      container.appendChild(node);
+    });
+  }
+
+  function renderModelUpdate(feedback) {
+    const summary = $("model-update-summary");
+    const panel = $("model-update-panel");
+    if (!summary || !panel) return;
+    if (!feedback) {
+      summary.textContent = "";
+      summary.classList.add("hidden");
+      panel.classList.add("hidden");
+      renderSimpleList("snapshot-delta-list", [], "No snapshot changes yet.");
+      renderSimpleList("carry-over-list", [], "No carry-over is active yet.");
+      return;
+    }
+    summary.textContent = feedback.model_update_summary || "Model update recorded.";
+    summary.classList.remove("hidden");
+    panel.classList.remove("hidden");
+    renderSimpleList("snapshot-delta-list", feedback.snapshot_delta || [], "No new snapshot delta was captured.");
+    renderSimpleList("carry-over-list", feedback.active_carry_over || [], "No active carry-over was returned.");
+  }
+
   function renderHistorySummary(history) {
     const list = $("history-summary-list");
     if (!list) return;
@@ -537,15 +617,19 @@
       `${Math.max((profile.signal_count || 0) - (profile.pending_signal_count || 0), 0)} reviewed`,
       `${profile.history_count} decisions`,
     ], "No signals");
-    renderSimpleList("stable-highlights", extractStableHighlights(profile), "No stable highlights yet.");
+    renderSimpleList("stable-highlights", card.stable_agent_brief || extractStableHighlights(profile), "No stable highlights yet.");
     renderSimpleList(
       "recent-summary-list",
-      [
+      card.recent_state_agent_brief || [
         ...(profile.latest_snapshot?.short_term_preference_notes || []),
         ...(profile.latest_snapshot?.drift_markers || []),
-        ...Object.values(card.recent_summary || {}).flatMap((value) => Array.isArray(value) ? value : []),
       ].slice(0, 6),
       "No recent-state highlights yet.",
+    );
+    renderSimpleList(
+      "reflection-summary-list",
+      card.reflection_carry_over_brief || card.recent_summary?.adaptation_signals || [],
+      "No feedback carry-over is active yet.",
     );
     renderExistingUserBanner(profile);
   }
@@ -823,6 +907,7 @@
     }
     setFeedbackButtonState(false, "Save feedback");
     setFeedbackSaveNote("");
+    renderModelUpdate(null);
   }
 
   function parseContextUpdates() {
@@ -945,9 +1030,12 @@
     renderEvidenceList("audit-decisive-factors", prediction.decision_audit.decisive_factors, "No decisive factors were captured.");
     renderEvidenceList("audit-watchouts", prediction.decision_audit.watchouts, "No specific watchouts were captured.");
     renderEvidenceList("audit-adaptation-signals", prediction.decision_audit.adaptation_signals, "No adaptation signals were active.");
+    renderAgentWorkflow(prediction.agent_workflow);
+    renderInfluenceList("top-choice-influence-list", prediction.top_choice_influence, "No influence breakdown was returned.");
 
     const rankList = $("rank-list");
     rankList.innerHTML = "";
+    const assessmentMap = new Map((prediction.option_influences || []).map((item) => [item.option_id, item]));
     prediction.ranked_options.forEach((item, index) => {
       const componentGrid = (item.component_scores || [])
         .map(
@@ -960,6 +1048,12 @@
           `,
         )
         .join("");
+      const assessment = assessmentMap.get(item.option_id);
+      const influenceChips = assessment
+        ? ["stable_profile", "recent_state", "memory", "context", "llm"]
+          .map((key) => `<span class="chip">${escapeHtml(formatInfluenceLabel(key))}: ${formatSignedScore(assessment.influence[key] || 0)}</span>`)
+          .join("")
+        : `<span class="chip">No grouped influence available</span>`;
       const node = document.createElement("div");
       node.className = "rank-item";
       const componentPreview = (item.component_scores || [])
@@ -971,8 +1065,19 @@
         <div class="mini">confidence: ${Math.round(item.confidence * 100)}% | raw score: ${item.raw_score}</div>
         <div class="mini">${escapeHtml(item.reason_summary)}</div>
         <div class="mini top-gap-sm">Top scoring factors: ${escapeHtml(componentPreview || "No component details")}</div>
+        <div class="chip-row top-gap-sm">${influenceChips}</div>
         <details class="top-gap-sm">
           <summary class="summary-trigger">Detailed breakdown</summary>
+          <div class="split-cards top-gap-sm">
+            <section>
+              <h3>Why choose</h3>
+              <div class="mini">${escapeHtml((assessment?.why_choose || []).join(" | ") || "No strong choose case was returned.")}</div>
+            </section>
+            <section>
+              <h3>Why avoid</h3>
+              <div class="mini">${escapeHtml((assessment?.why_avoid || []).join(" | ") || "No strong avoid case was returned.")}</div>
+            </section>
+          </div>
           <div class="component-grid top-gap-sm">${componentGrid || `<div class="component-chip"><div class="mini">No component details.</div></div>`}</div>
           <div class="mini top-gap-sm"><strong>Supporting evidence:</strong> ${escapeHtml((item.supporting_evidence || []).join(" | ") || "none")}</div>
           <div class="mini"><strong>Counter evidence:</strong> ${escapeHtml((item.counter_evidence || []).join(" | ") || "none")}</div>
@@ -1373,6 +1478,7 @@
           }),
         });
         setFeedbackButtonState(true, "Feedback saved");
+        renderModelUpdate(feedback);
         setFeedbackSaveNote(
           `Saved actual choice '${feedback.actual_option_text}'. Memory and profile snapshot were updated.`,
         );

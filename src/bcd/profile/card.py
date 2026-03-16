@@ -15,20 +15,20 @@ class ProfileCardRenderer:
         profile: UserProfileRead,
     ) -> str:
         lines = [
-            f"# Stable Profile Card: {profile.display_name}",
+            f"# Profile Agent Brief (Stable Profile Card): {profile.display_name}",
             "",
             f"- User ID: `{profile.user_id}`",
-            f"- Profile summary: {profile.profile_summary}",
-            f"- Stable signal count: {profile.signal_count}",
-            f"- Pending signal review count: {profile.pending_signal_count}",
+            f"- Core read on the user: {profile.profile_summary}",
+            f"- Reviewed stable signal count: {profile.signal_count}",
+            f"- Pending stable signal review count: {profile.pending_signal_count}",
             "",
-            "## Stable signals",
+            "## What the Profile Agent trusts",
         ]
 
         for key, value in profile.personality_signals.items():
             lines.append(f"- {key.replace('_', ' ').title()}: {value}")
 
-        lines.extend(["", "## Long-term preferences"])
+        lines.extend(["", "## Long-term preference anchors"])
         category_preferences = profile.long_term_preferences.get("category_preferences", {})
         for category, signals in category_preferences.items():
             preferred = ", ".join(signals.get("preferred_keywords", [])) or "None"
@@ -37,15 +37,24 @@ class ProfileCardRenderer:
 
         context_preferences = profile.long_term_preferences.get("context_preferences", {})
         if context_preferences:
-            lines.extend(["", "## Context preferences"])
+            lines.extend(["", "## Stable context preferences"])
             for key, value in context_preferences.items():
                 lines.append(f"- {key}: {', '.join(value)}")
 
         if profile.onboarding_answers:
-            lines.extend(["", "## Onboarding answers"])
+            lines.extend(["", "## Explicit onboarding evidence"])
             for item in profile.onboarding_answers:
                 lines.append(f"- Q: {item['question']}")
                 lines.append(f"  A: {item['answer']}")
+
+        lines.extend(
+            [
+                "",
+                "## Profile Agent conclusion",
+                "- Use this section to answer who this person is in general.",
+                "- Stable signals should shape the baseline before recent state or memory adds temporary pressure.",
+            ]
+        )
 
         return "\n".join(lines).strip() + "\n"
 
@@ -57,7 +66,7 @@ class ProfileCardRenderer:
         feedback_shift_notes: list[str] | None = None,
     ) -> str:
         lines = [
-            f"# Recent State Card: {profile.display_name}",
+            f"# Recent State + Reflection Brief: {profile.display_name}",
             "",
             f"- User ID: `{profile.user_id}`",
         ]
@@ -66,7 +75,7 @@ class ProfileCardRenderer:
             lines.extend(
                 [
                     "",
-                    "## Latest short-term snapshot",
+                    "## Recent State Agent snapshot",
                     f"- Summary: {profile.latest_snapshot.summary}",
                 ]
             )
@@ -83,22 +92,22 @@ class ProfileCardRenderer:
                 lines.append(f"- {note}")
 
         if feedback_shift_notes:
-            lines.extend(["", "## Feedback-derived shift markers"])
+            lines.extend(["", "## Reflection Agent carry-over"])
             for note in feedback_shift_notes[:5]:
                 lines.append(f"- {note}")
 
         if recent_memories:
-            lines.extend(["", "## Representative recent memories"])
+            lines.extend(["", "## Memory Agent quick recall"])
             for memory in recent_memories[:5]:
                 lines.append(f"- [{memory['category']}] {memory['summary']}")
 
         lines.extend(
             [
                 "",
-                "## Prediction guidance",
-                "- Prefer what this user is likely to choose in practice.",
-                "- Use current context and recent memories, not just generic preference keywords.",
-                "- When uncertain, favor low-friction, familiar, context-compatible options.",
+                "## Agent workflow guidance",
+                "- Use this section to answer what matters about this user right now.",
+                "- Treat feedback-derived carry-over as temporary but behaviorally important.",
+                "- When uncertain, prefer the option this person would realistically pick in practice.",
             ]
         )
         return "\n".join(lines).strip() + "\n"

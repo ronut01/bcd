@@ -25,6 +25,7 @@ class ReflectionService:
             raise ValueError(f"Decision request '{request_id}' was not found.")
         if self.repository.get_feedback_by_request(request_id) is not None:
             raise ValueError("Feedback has already been recorded for this prediction.")
+        previous_snapshot = self.repository.get_latest_snapshot(request.user_id)
 
         options = self.repository.list_options_for_request(request_id)
         option_by_id = {option.option_id: option for option in options}
@@ -85,6 +86,14 @@ class ReflectionService:
         snapshot = self.profile_service._rebuild_snapshot(request.user_id)
         snapshot = self.repository.add(snapshot)
         self.profile_service.ensure_profile_card(request.user_id)
+        snapshot_delta = self._build_snapshot_delta(previous_snapshot=previous_snapshot, updated_snapshot=snapshot)
+        active_carry_over = self._extract_active_carry_over(snapshot)
+        model_update_summary = self._build_model_update_summary(
+            actual_option_text=chosen_option.option_text,
+            prediction_correct=bool(prediction and prediction.predicted_option_id == chosen_option.option_id),
+            snapshot_delta=snapshot_delta,
+            active_carry_over=active_carry_over,
+        )
 
         return FeedbackResponse(
             feedback_id=feedback.feedback_id,
@@ -95,6 +104,10 @@ class ReflectionService:
             prediction_correct=bool(prediction and prediction.predicted_option_id == chosen_option.option_id),
             created_memory_id=memory.memory_id,
             updated_snapshot_id=snapshot.snapshot_id,
+            model_update_summary=model_update_summary,
+            snapshot_delta=snapshot_delta,
+            new_memory_summary=memory.summary,
+            active_carry_over=active_carry_over,
             created_at=feedback.created_at,
         )
 
@@ -186,3 +199,56 @@ class ReflectionService:
         if context_updates:
             pieces.append(f"Feedback update: {flatten_to_text(context_updates)}.")
         return " ".join(pieces)
+
+    @staticmethod
+    def _build_snapshot_delta(previous_snapshot, updated_snapshot) -> list[str]:
+        previous_notes = previous_snapshot.short_term_preference_notes_json if previous_snapshot else []
+        updated_notes = updated_snapshot.short_term_preference_notes_json
+        previous_drifts = previous_snapshot.drift_markers_json if previous_snapshot else []
+        updated_drifts = updated_snapshot.drift_markers_json
+        previous_overrides = (
+            previous_snapshot.derived_statistics_json.get("active_context_overrides", {})
+            if previous_snapshot
+            else {}
+        )
+        updated_overrides = updated_snapshot.derived_statistics_json.get("active_context_overrides", {})
+
+        delta: list[str] = []
+        for note in updated_notes:
+            if note not in previous_notes:
+                delta.append(f"New short-term note: {note}")
+        for marker in updated_drifts:
+            if marker not in previous_drifts:
+                delta.append(f"New drift marker: {marker}")
+        for key, value in updated_overrides.items():
+            if previous_overrides.get(key) != value:
+                delta.append(f"Carry-over context updated: {key}={value}")
+        return delta[:5]
+
+    @staticmethod
+    def _extract_active_carry_over(snapshot) -> list[str]:
+        active_overrides = snapshot.derived_statistics_json.get("active_context_overrides", {})
+        shift_notes = snapshot.derived_statistics_json.get("recent_shift_notes", [])
+        carry_over = [f"{key}={value}" for key, value in active_overrides.items()]
+        carry_over.extend(shift_notes[:2])
+        return carry_over[:4]
+
+    @staticmethod
+    def _build_model_update_summary(
+        actual_option_text: str,
+        prediction_correct: bool,
+        snapshot_delta: list[str],
+        active_carry_over: list[str],
+    ) -> str:
+        outcome_text = "confirmed" if prediction_correct else "corrected"
+        if snapshot_delta:
+            return (
+                f"The Reflection Agent {outcome_text} the model with the actual choice '{actual_option_text}' "
+                f"and activated {snapshot_delta[0]}"
+            )
+        if active_carry_over:
+            return (
+                f"The Reflection Agent {outcome_text} the model with the actual choice '{actual_option_text}' "
+                "and kept the latest carry-over active for future predictions."
+            )
+        return f"The Reflection Agent {outcome_text} the model with the actual choice '{actual_option_text}'."

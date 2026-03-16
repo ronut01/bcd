@@ -256,6 +256,17 @@
               </div>
             </div>
 
+            <div class="split-cards">
+              <section class="list-card">
+                <h3>Agent workflow</h3>
+                <div class="signal-list top-gap-sm" id="agent-workflow-list"></div>
+              </section>
+              <section class="list-card">
+                <h3>Top choice influence</h3>
+                <div class="signal-list top-gap-sm" id="top-choice-influence-list"></div>
+              </section>
+            </div>
+
             <div class="list-card">
               <h3>Ranked options</h3>
               <div class="rank-list top-gap-sm" id="rank-list"></div>
@@ -308,6 +319,17 @@
               <span class="section-tag">Feedback</span>
               <h3>Give feedback</h3>
               <p class="help">Record what the user actually chose so memory, recent state, and drift markers can update.</p>
+              <div class="inline-note hidden top-gap-sm" id="model-update-summary"></div>
+              <div class="split-cards hidden top-gap-sm" id="model-update-panel">
+                <section class="list-card">
+                  <h3>Snapshot delta</h3>
+                  <div class="signal-list top-gap-sm" id="snapshot-delta-list"></div>
+                </section>
+                <section class="list-card">
+                  <h3>Carry-over into next prediction</h3>
+                  <div class="signal-list top-gap-sm" id="carry-over-list"></div>
+                </section>
+              </div>
               <div class="stack top-gap">
                 <div class="field">
                   <label for="actual-option">Actual chosen option</label>

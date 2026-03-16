@@ -11,6 +11,10 @@ from sqlmodel import Session
 
 from bcd.config import Settings, get_settings
 from bcd.decision.schemas import (
+    AgentBrief,
+    AgentInfluenceBreakdown,
+    AgentOptionAssessment,
+    AgentWorkflowTrace,
     DecisionAudit,
     DecisionOptionSuggestionInput,
     DecisionPredictionInput,
@@ -294,11 +298,25 @@ class DecisionService:
             llm_result=llm_result,
             llm_error=llm_error,
         )
+        option_influences = self._build_option_assessments(ranked=ranked)
+        agent_workflow = self._build_agent_workflow(
+            user=user,
+            category=payload.category,
+            profile_signals=profile_signals,
+            recent_state_payload=recent_state_payload,
+            retrieved_memories=retrieved_memories,
+            ranked=ranked,
+            option_influences=option_influences,
+            effective_context=effective_context,
+        )
+        top_choice_influence = option_influences[0].influence
         explanation_sections = self._build_explanation_sections(
             ranked=ranked,
             retrieved_memories=retrieved_memories,
             recent_state_payload=recent_state_payload,
             llm_note=llm_result.explanation if llm_result else llm_error,
+            agent_workflow=agent_workflow,
+            option_influences=option_influences,
         )
         decision_audit = self._build_decision_audit(
             ranked=ranked,
@@ -364,6 +382,9 @@ class DecisionService:
                 for item in ranked
             ],
             retrieved_memories=retrieved_memories,
+            agent_workflow=agent_workflow,
+            top_choice_influence=top_choice_influence,
+            option_influences=option_influences,
             explanation_sections=explanation_sections,
             decision_audit=decision_audit,
             created_at=prediction.created_at,
@@ -554,15 +575,289 @@ class DecisionService:
         total = sum(scaled)
         return [value / total for value in scaled]
 
+    def _build_agent_workflow(
+        self,
+        user,
+        category: str,
+        profile_signals: list[ProfileSignalRead],
+        recent_state_payload: dict,
+        retrieved_memories,
+        ranked: list[_ResolvedOptionScore],
+        option_influences: list[AgentOptionAssessment],
+        effective_context: dict,
+    ) -> AgentWorkflowTrace:
+        return AgentWorkflowTrace(
+            profile_agent=self._build_profile_agent_brief(
+                user=user,
+                category=category,
+                profile_signals=profile_signals,
+            ),
+            recent_state_agent=self._build_recent_state_agent_brief(
+                recent_state_payload=recent_state_payload,
+                effective_context=effective_context,
+            ),
+            memory_agent=self._build_memory_agent_brief(retrieved_memories=retrieved_memories),
+            choice_reasoning_agent=self._build_choice_reasoning_agent_brief(
+                ranked=ranked,
+                option_influences=option_influences,
+            ),
+            reflection_agent=self._build_reflection_agent_brief(
+                recent_state_payload=recent_state_payload,
+                effective_context=effective_context,
+            ),
+        )
+
+    @staticmethod
+    def _build_profile_agent_brief(
+        user,
+        category: str,
+        profile_signals: list[ProfileSignalRead],
+    ) -> AgentBrief:
+        reviewed_signals = [signal for signal in profile_signals if signal.status in {"accepted", "edited"}]
+        values = user.personality_signals_json.get("values", [])[:2]
+        decision_style = user.personality_signals_json.get("decision_style", [])[:2]
+        category_preferences = user.long_term_preferences_json.get("category_preferences", {}).get(category, {})
+        preferred_keywords = category_preferences.get("preferred_keywords", [])[:3]
+        observations = [user.profile_summary]
+        if reviewed_signals:
+            observations.append(f"{len(reviewed_signals)} reviewed profile signals are actively shaping the stable model.")
+        if values:
+            observations.append(f"Core values that recur in this profile: {', '.join(values)}.")
+        if decision_style:
+            observations.append(f"Decision style markers: {', '.join(decision_style)}.")
+        if preferred_keywords:
+            observations.append(f"For {category}, the stable profile leans toward {', '.join(preferred_keywords)}.")
+        conclusion = (
+            f"In general, {user.display_name} tends to choose {category} options that feel "
+            f"{', '.join(preferred_keywords[:2])}."
+            if preferred_keywords
+            else f"In general, {user.display_name}'s stable profile is coherent enough to guide this decision."
+        )
+        return AgentBrief(
+            agent_name="Profile Agent",
+            focus="Describe who this user is in general and what stable preferences usually persist.",
+            observations=observations[:4],
+            conclusion=conclusion,
+        )
+
+    @staticmethod
+    def _build_recent_state_agent_brief(
+        recent_state_payload: dict,
+        effective_context: dict,
+    ) -> AgentBrief:
+        manual_notes = recent_state_payload.get("manual_notes", [])[:2]
+        snapshot_notes = recent_state_payload.get("snapshot_notes", [])[:2]
+        drift_markers = recent_state_payload.get("drift_markers", [])[:2]
+        active_overrides = recent_state_payload.get("active_context_overrides", {})
+        observations = list(dict.fromkeys(manual_notes + snapshot_notes + drift_markers))
+        if active_overrides:
+            observations.append(
+                "Active carry-over context: "
+                + ", ".join(f"{key}={value}" for key, value in list(active_overrides.items())[:3])
+                + "."
+            )
+        if not observations and effective_context:
+            observations.append(
+                "Current explicit context is "
+                + ", ".join(f"{key}={value}" for key, value in effective_context.items())
+                + "."
+            )
+        active_recent_pressure = bool(manual_notes or snapshot_notes or drift_markers or active_overrides)
+        conclusion = (
+            "Right now, temporary state is materially changing what would feel natural to choose."
+            if active_recent_pressure
+            else "No temporary state is strongly overriding the stable profile right now."
+        )
+        return AgentBrief(
+            agent_name="Recent State Agent",
+            focus="Identify what matters about this user right now rather than in general.",
+            observations=observations[:4],
+            conclusion=conclusion,
+        )
+
+    @staticmethod
+    def _build_memory_agent_brief(retrieved_memories) -> AgentBrief:
+        observations = [
+            f"{memory.chosen_option_text}: {memory.why_retrieved[0] if memory.why_retrieved else memory.summary}"
+            for memory in retrieved_memories[:3]
+        ]
+        direct_precedent = next(
+            (memory for memory in retrieved_memories if memory.memory_role in {"direct_match", "recent_repeat"}),
+            None,
+        )
+        conclusion = (
+            f"A close precedent exists: the user recently chose '{direct_precedent.chosen_option_text}' in a similar situation."
+            if direct_precedent
+            else "No exact precedent dominated, so analogous memories are guiding the comparison."
+        )
+        if not observations:
+            observations = ["No retrieved memory strongly matched this request."]
+        return AgentBrief(
+            agent_name="Memory Agent",
+            focus="Find which past choices are genuinely relevant for this decision.",
+            observations=observations,
+            conclusion=conclusion,
+        )
+
+    def _build_choice_reasoning_agent_brief(
+        self,
+        ranked: list[_ResolvedOptionScore],
+        option_influences: list[AgentOptionAssessment],
+    ) -> AgentBrief:
+        top = ranked[0]
+        runner_up = ranked[1] if len(ranked) > 1 else None
+        top_assessment = option_influences[0]
+        observations = list(top_assessment.why_choose[:2])
+        if runner_up:
+            runner_up_assessment = next(
+                (item for item in option_influences if item.option_id == runner_up.scored_option.option.option_id),
+                None,
+            )
+            if runner_up_assessment and runner_up_assessment.why_avoid:
+                observations.append(
+                    f"Runner-up friction for '{runner_up_assessment.option_text}': {runner_up_assessment.why_avoid[0]}"
+                )
+        influence = top_assessment.influence
+        influence_pairs = [
+            ("stable profile", influence.stable_profile),
+            ("recent state", influence.recent_state),
+            ("memory", influence.memory),
+            ("context", influence.context),
+            ("llm", influence.llm),
+        ]
+        strongest_label, strongest_score = max(influence_pairs, key=lambda item: abs(item[1]))
+        strongest_direction = "push" if strongest_score >= 0 else "drag"
+        conclusion = (
+            f"'{top.scored_option.option.option_text}' wins because {strongest_label} supplied the strongest {strongest_direction} "
+            f"({round(strongest_score, 2)})."
+        )
+        return AgentBrief(
+            agent_name="Choice Reasoning Agent",
+            focus="Compare candidate options and explain why this user would choose or avoid each one.",
+            observations=observations[:4],
+            conclusion=conclusion,
+        )
+
+    @staticmethod
+    def _build_reflection_agent_brief(
+        recent_state_payload: dict,
+        effective_context: dict,
+    ) -> AgentBrief:
+        feedback_shift_notes = recent_state_payload.get("feedback_shift_notes", [])[:2]
+        adaptation_signals = recent_state_payload.get("adaptation_signals", [])[:2]
+        active_overrides = recent_state_payload.get("active_context_overrides", {})
+        observations = list(dict.fromkeys(feedback_shift_notes + adaptation_signals))
+        if active_overrides:
+            observations.append(
+                "Carry-over from recent feedback remains active for "
+                + ", ".join(f"{key}={value}" for key, value in list(active_overrides.items())[:3])
+                + "."
+            )
+        if not observations and effective_context:
+            observations.append("No recent feedback override is active beyond the explicit current context.")
+        has_reflection_pressure = bool(feedback_shift_notes or adaptation_signals or active_overrides)
+        conclusion = (
+            "Recent feedback is still updating the user model and should remain visible in the next few decisions."
+            if has_reflection_pressure
+            else "No strong feedback-driven carry-over is active beyond the current baseline profile."
+        )
+        return AgentBrief(
+            agent_name="Reflection Agent",
+            focus="Track how recent feedback should update the near-term user model.",
+            observations=observations[:4],
+            conclusion=conclusion,
+        )
+
+    @staticmethod
+    def _build_influence_breakdown(scored_option: ScoredOption) -> AgentInfluenceBreakdown:
+        bucket_map = {
+            "profile_affinity": "stable_profile",
+            "memory_support": "memory",
+            "recent_state_influence": "recent_state",
+            "recent_trend_influence": "recent_state",
+            "adaptive_context_alignment": "recent_state",
+            "context_compatibility": "context",
+            "llm_rank_bonus": "llm",
+        }
+        totals = {
+            "stable_profile": 0.0,
+            "recent_state": 0.0,
+            "memory": 0.0,
+            "context": 0.0,
+            "llm": 0.0,
+        }
+        dominant_signals: list[str] = []
+        sorted_components = sorted(
+            scored_option.component_scores,
+            key=lambda component: abs(component.weighted_score),
+            reverse=True,
+        )
+        for component in sorted_components:
+            bucket = bucket_map.get(component.name)
+            if bucket is not None:
+                totals[bucket] += component.weighted_score
+            if component.reason and abs(component.weighted_score) >= 0.12:
+                direction = "support" if component.weighted_score >= 0 else "drag"
+                dominant_signals.append(
+                    f"{bucket.replace('_', ' ') if bucket else component.name} {direction}: {component.reason}"
+                )
+        return AgentInfluenceBreakdown(
+            option_id=scored_option.option.option_id,
+            option_text=scored_option.option.option_text,
+            stable_profile=round(totals["stable_profile"], 4),
+            recent_state=round(totals["recent_state"], 4),
+            memory=round(totals["memory"], 4),
+            context=round(totals["context"], 4),
+            llm=round(totals["llm"], 4),
+            dominant_signals=dominant_signals[:4],
+        )
+
+    def _build_option_assessments(
+        self,
+        ranked: list[_ResolvedOptionScore],
+    ) -> list[AgentOptionAssessment]:
+        assessments: list[AgentOptionAssessment] = []
+        for index, item in enumerate(ranked):
+            scored_option = item.scored_option
+            positive_component_reasons = [
+                component.reason
+                for component in scored_option.component_scores
+                if component.weighted_score > 0 and component.reason
+            ]
+            negative_component_reasons = [
+                component.reason
+                for component in scored_option.component_scores
+                if component.weighted_score < 0 and component.reason
+            ]
+            why_choose = list(dict.fromkeys(scored_option.supporting_evidence + positive_component_reasons))[:4]
+            why_avoid = list(dict.fromkeys(scored_option.counter_evidence + negative_component_reasons))[:4]
+            if not why_choose:
+                why_choose = [scored_option.reason_summary]
+            if not why_avoid and index > 0:
+                why_avoid = ["Other candidate options received stronger personalized support for this user."]
+            assessments.append(
+                AgentOptionAssessment(
+                    option_id=scored_option.option.option_id,
+                    option_text=scored_option.option.option_text,
+                    why_choose=why_choose,
+                    why_avoid=why_avoid,
+                    influence=self._build_influence_breakdown(scored_option),
+                )
+            )
+        return assessments
+
     def _build_explanation_sections(
         self,
         ranked: list[_ResolvedOptionScore],
         retrieved_memories,
         recent_state_payload: dict,
         llm_note: str | None,
+        agent_workflow: AgentWorkflowTrace,
+        option_influences: list[AgentOptionAssessment],
     ) -> ExplanationSections:
         top = ranked[0]
         runner_up = ranked[1] if len(ranked) > 1 else None
+        top_assessment = option_influences[0]
         memory_evidence = [
             f"{memory.chosen_option_text}: {memory.why_retrieved[0] if memory.why_retrieved else memory.summary}"
             for memory in retrieved_memories[:3]
@@ -570,11 +865,17 @@ class DecisionService:
         recent_notes = recent_state_payload.get("combined_notes", [])[:3]
         losing_reasons: list[str] = []
         if runner_up:
-            if runner_up.scored_option.counter_evidence:
+            runner_up_assessment = next(
+                (item for item in option_influences if item.option_id == runner_up.scored_option.option.option_id),
+                None,
+            )
+            if runner_up_assessment and runner_up_assessment.why_avoid:
+                losing_reasons.extend(runner_up_assessment.why_avoid[:2])
+            elif runner_up.scored_option.counter_evidence:
                 losing_reasons.extend(runner_up.scored_option.counter_evidence[:2])
             else:
                 losing_reasons.append(
-                    f"'{runner_up.scored_option.option.option_text}' received less combined support from profile, memory, and recent state."
+                    f"'{runner_up.scored_option.option.option_text}' received less combined support from stable profile, recent state, memory, and context."
                 )
         if llm_note:
             losing_reasons.append(f"LLM note: {llm_note}")
@@ -584,16 +885,19 @@ class DecisionService:
 
         return ExplanationSections(
             top_choice_summary=(
-                f"The system predicts '{top.scored_option.option.option_text}' because it has the strongest combined support "
-                f"from stable preferences, retrieved memories, current context, and recent state."
+                f"{agent_workflow.profile_agent.conclusion} {agent_workflow.recent_state_agent.conclusion} "
+                f"{agent_workflow.memory_agent.conclusion} That makes '{top.scored_option.option.option_text}' feel like "
+                "the most natural choice for this person right now."
             ),
-            why_this_option=top.scored_option.supporting_evidence[:4] or [top.scored_option.reason_summary],
-            what_memories_mattered=memory_evidence or ["No strong retrieved memory dominated this prediction."],
+            why_this_option=top_assessment.why_choose[:4] or [top.scored_option.reason_summary],
+            what_memories_mattered=memory_evidence or agent_workflow.memory_agent.observations[:3],
             what_recent_state_mattered=(
-                recent_notes + recent_state_payload.get("adaptation_signals", [])[:2]
+                agent_workflow.recent_state_agent.observations[:3]
+                + recent_notes
+                + recent_state_payload.get("adaptation_signals", [])[:2]
             )[:4]
             or ["No recent-state note or short-term drift marker strongly changed the result."],
-            why_other_options_lost=losing_reasons[:4],
+            why_other_options_lost=(losing_reasons + top_assessment.influence.dominant_signals[:1])[:4],
         )
 
     def _build_suggestion_candidates(

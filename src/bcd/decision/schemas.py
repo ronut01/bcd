@@ -18,6 +18,40 @@ class RankedOptionComponentScore(BaseModel):
     reason: str
 
 
+class AgentBrief(BaseModel):
+    agent_name: str
+    focus: str
+    observations: list[str] = Field(default_factory=list)
+    conclusion: str
+
+
+class AgentInfluenceBreakdown(BaseModel):
+    option_id: str
+    option_text: str
+    stable_profile: float = 0.0
+    recent_state: float = 0.0
+    memory: float = 0.0
+    context: float = 0.0
+    llm: float = 0.0
+    dominant_signals: list[str] = Field(default_factory=list)
+
+
+class AgentOptionAssessment(BaseModel):
+    option_id: str
+    option_text: str
+    why_choose: list[str] = Field(default_factory=list)
+    why_avoid: list[str] = Field(default_factory=list)
+    influence: AgentInfluenceBreakdown
+
+
+class AgentWorkflowTrace(BaseModel):
+    profile_agent: AgentBrief
+    recent_state_agent: AgentBrief
+    memory_agent: AgentBrief
+    choice_reasoning_agent: AgentBrief
+    reflection_agent: AgentBrief
+
+
 class ExplanationSections(BaseModel):
     top_choice_summary: str
     why_this_option: list[str] = Field(default_factory=list)
@@ -106,6 +140,9 @@ class PredictionResponse(BaseModel):
     profile_card_path: str | None = None
     ranked_options: list[RankedOption]
     retrieved_memories: list[RetrievedMemory] = Field(default_factory=list)
+    agent_workflow: AgentWorkflowTrace
+    top_choice_influence: AgentInfluenceBreakdown
+    option_influences: list[AgentOptionAssessment] = Field(default_factory=list)
     explanation_sections: ExplanationSections
     decision_audit: DecisionAudit
     created_at: datetime
@@ -143,6 +180,10 @@ class FeedbackResponse(BaseModel):
     prediction_correct: bool
     created_memory_id: str
     updated_snapshot_id: str
+    model_update_summary: str
+    snapshot_delta: list[str] = Field(default_factory=list)
+    new_memory_summary: str
+    active_carry_over: list[str] = Field(default_factory=list)
     created_at: datetime
 
 

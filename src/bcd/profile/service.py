@@ -569,6 +569,9 @@ class ProfileService:
             "content": combined_content,
             "stable_content": stable_content,
             "recent_content": recent_content,
+            "stable_agent_brief": self._build_stable_agent_brief(bundle),
+            "recent_state_agent_brief": self._build_recent_state_agent_brief(recent_state_payload, bundle),
+            "reflection_carry_over_brief": recent_state_payload["adaptation_signals"][:4],
             "stable_summary": {
                 "signal_count": bundle.signal_count,
                 "pending_signal_count": bundle.pending_signal_count,
@@ -616,6 +619,43 @@ class ProfileService:
 
     def _profile_card_path(self, user_id: str):
         return self.settings.profile_card_dir / f"{user_id}.md"
+
+    @staticmethod
+    def _build_stable_agent_brief(bundle: UserProfileRead) -> list[str]:
+        brief = [bundle.profile_summary]
+        values = bundle.personality_signals.get("values", [])[:2]
+        decision_style = bundle.personality_signals.get("decision_style", [])[:2]
+        if values:
+            brief.append(f"Core values: {', '.join(values)}.")
+        if decision_style:
+            brief.append(f"Decision style: {', '.join(decision_style)}.")
+        category_preferences = bundle.long_term_preferences.get("category_preferences", {})
+        for category, payload in list(category_preferences.items())[:2]:
+            preferred_keywords = payload.get("preferred_keywords", [])[:3]
+            if preferred_keywords:
+                brief.append(f"{category} usually leans toward {', '.join(preferred_keywords)}.")
+        return brief[:4]
+
+    @staticmethod
+    def _build_recent_state_agent_brief(recent_state_payload: dict, bundle: UserProfileRead) -> list[str]:
+        brief = list(
+            dict.fromkeys(
+                recent_state_payload.get("manual_notes", [])[:2]
+                + recent_state_payload.get("snapshot_notes", [])[:2]
+                + recent_state_payload.get("drift_markers", [])[:2]
+            )
+        )
+        if not brief and bundle.latest_snapshot is not None:
+            brief.append(bundle.latest_snapshot.summary)
+        if recent_state_payload.get("active_context_overrides"):
+            brief.append(
+                "Active carry-over context: "
+                + ", ".join(
+                    f"{key}={value}"
+                    for key, value in list(recent_state_payload["active_context_overrides"].items())[:3]
+                )
+            )
+        return brief[:4]
 
     def _build_profile_signal_rows(
         self,

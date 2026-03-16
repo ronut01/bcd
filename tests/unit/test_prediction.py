@@ -36,6 +36,13 @@ def test_predict_returns_valid_option_and_normalized_confidence(configured_env):
     assert prediction.decision_audit.confidence_label
     assert prediction.ranked_options[0].component_scores
     assert prediction.ranked_options[0].supporting_evidence
+    assert prediction.agent_workflow.profile_agent.agent_name == "Profile Agent"
+    assert prediction.agent_workflow.recent_state_agent.agent_name == "Recent State Agent"
+    assert prediction.agent_workflow.memory_agent.agent_name == "Memory Agent"
+    assert prediction.agent_workflow.choice_reasoning_agent.agent_name == "Choice Reasoning Agent"
+    assert prediction.agent_workflow.reflection_agent.agent_name == "Reflection Agent"
+    assert prediction.top_choice_influence.option_id == prediction.predicted_option_id
+    assert prediction.option_influences[0].option_id == prediction.predicted_option_id
 
 
 def test_recent_state_note_can_shift_the_top_prediction(configured_env):
@@ -82,6 +89,8 @@ def test_recent_state_note_can_shift_the_top_prediction(configured_env):
         component.name == "recent_state_influence" and component.weighted_score > 0
         for component in shifted_prediction.ranked_options[0].component_scores
     )
+    assert shifted_prediction.agent_workflow.recent_state_agent.observations
+    assert any("Recent state note supports this option" in item for item in shifted_prediction.option_influences[0].why_choose)
 
 
 def test_feedback_context_updates_carry_into_the_next_prediction(configured_env):
@@ -134,6 +143,8 @@ def test_feedback_context_updates_carry_into_the_next_prediction(configured_env)
         component.name == "adaptive_context_alignment"
         for component in next_prediction.ranked_options[0].component_scores
     )
+    assert next_prediction.agent_workflow.reflection_agent.observations
+    assert "deadline=tonight" in " ".join(next_prediction.agent_workflow.reflection_agent.observations)
 
 
 def test_social_context_beyond_friends_changes_the_prediction(configured_env):

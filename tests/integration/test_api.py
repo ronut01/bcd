@@ -84,6 +84,9 @@ def test_api_happy_path(configured_env):
     assert prediction_payload["decision_audit"]["confidence_label"]
     assert prediction_payload["ranked_options"][0]["component_scores"]
     assert "why_retrieved" in prediction_payload["retrieved_memories"][0]
+    assert prediction_payload["agent_workflow"]["profile_agent"]["agent_name"] == "Profile Agent"
+    assert prediction_payload["top_choice_influence"]["option_id"] == prediction_payload["predicted_option_id"]
+    assert prediction_payload["option_influences"][0]["influence"]["stable_profile"] is not None
     suggestion_response = client.post(
         "/decisions/suggest-options",
         json={
@@ -112,6 +115,9 @@ def test_api_happy_path(configured_env):
     )
     assert feedback_response.status_code == 200
     assert feedback_response.json()["reflection_id"]
+    assert feedback_response.json()["model_update_summary"]
+    assert "snapshot_delta" in feedback_response.json()
+    assert "active_carry_over" in feedback_response.json()
     duplicate_feedback_response = client.post(
         f"/decisions/{prediction_payload['request_id']}/feedback",
         json={

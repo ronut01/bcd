@@ -41,6 +41,10 @@ def test_feedback_creates_memory_and_updates_snapshot(configured_env):
     assert result.created_memory_id
     assert result.reflection_id
     assert result.updated_snapshot_id
+    assert result.model_update_summary
+    assert result.new_memory_summary
+    assert isinstance(result.snapshot_delta, list)
+    assert isinstance(result.active_carry_over, list)
 
 
 def test_duplicate_feedback_for_same_prediction_is_rejected(configured_env):
