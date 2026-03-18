@@ -26,6 +26,11 @@ def test_api_happy_path(configured_env):
     predict_response = client.get("/app/predict")
     assert predict_response.status_code == 200
     assert "prediction workspace" in predict_response.text.lower()
+    showcase_response = client.get("/demo/showcase")
+    assert showcase_response.status_code == 200
+    showcase_payload = showcase_response.json()
+    assert len(showcase_payload["personas"]) >= 3
+    assert len(showcase_payload["scenarios"]) >= 6
 
     questionnaire_response = client.get("/profiles/onboarding-questionnaire")
     assert questionnaire_response.status_code == 200
@@ -46,7 +51,7 @@ def test_api_happy_path(configured_env):
     assert preview_response.status_code == 200
     assert "profile_summary" in preview_response.json()
 
-    bootstrap_response = client.post("/profiles/bootstrap-sample")
+    bootstrap_response = client.post("/profiles/bootstrap-sample", params={"sample_id": "alex_chen"})
     assert bootstrap_response.status_code == 200
     user_id = bootstrap_response.json()["user_id"]
     card_response = client.get(f"/profiles/{user_id}/card")

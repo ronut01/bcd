@@ -376,6 +376,10 @@ button:active,
   box-shadow: var(--shadow-sm);
 }
 
+.showcase-card {
+  align-content: start;
+}
+
 .source-card strong,
 .wizard-option-card strong {
   display: block;
@@ -617,6 +621,10 @@ button:disabled {
   color: #fff;
 }
 
+.prediction-hero p {
+  max-width: 62ch;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -725,6 +733,11 @@ details[open] > .summary-trigger {
   border-color: rgba(220, 38, 38, 0.16);
   background: rgba(220, 38, 38, 0.06);
   color: var(--danger);
+}
+
+#feedback-adaptation-panel {
+  margin-top: 12px;
+  background: linear-gradient(180deg, rgba(243, 247, 255, 0.9), rgba(255, 255, 255, 0.98));
 }
 
 .component-grid,

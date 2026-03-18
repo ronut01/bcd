@@ -1,0 +1,77 @@
+[
+  {
+    "prompt": "Pick a Friday night plan after a demanding week.",
+    "category": "entertainment",
+    "context": {
+      "time_of_day": "evening",
+      "energy": "medium",
+      "with": "friends",
+      "budget": "medium"
+    },
+    "options": [
+      {"option_text": "Neighborhood wine bar with live jazz"},
+      {"option_text": "Huge loud sports bar"},
+      {"option_text": "Stay home with random streaming"}
+    ],
+    "predicted_option_text": "Neighborhood wine bar with live jazz",
+    "actual_option_text": "Neighborhood wine bar with live jazz",
+    "reason_text": "It felt social, tasteful, and more memorable than the generic alternatives.",
+    "reason_tags": ["curated", "social", "memorable"]
+  },
+  {
+    "prompt": "Choose a small apartment purchase for the weekend.",
+    "category": "shopping",
+    "context": {
+      "time_of_day": "morning",
+      "budget": "medium",
+      "with": "alone"
+    },
+    "options": [
+      {"option_text": "Thoughtful ceramic mug set"},
+      {"option_text": "Generic discount mug pack"},
+      {"option_text": "Expensive sculptural vase"}
+    ],
+    "predicted_option_text": "Thoughtful ceramic mug set",
+    "actual_option_text": "Thoughtful ceramic mug set",
+    "reason_text": "It felt useful and beautiful without becoming an over-the-top splurge.",
+    "reason_tags": ["quality", "useful", "tasteful"]
+  },
+  {
+    "prompt": "Pick lunch while catching up with a close friend.",
+    "category": "food",
+    "context": {
+      "time_of_day": "afternoon",
+      "energy": "medium",
+      "with": "friends",
+      "budget": "medium"
+    },
+    "options": [
+      {"option_text": "Cozy seasonal cafe"},
+      {"option_text": "Fast-food combo"},
+      {"option_text": "Noisy chain restaurant"}
+    ],
+    "predicted_option_text": "Cozy seasonal cafe",
+    "actual_option_text": "Cozy seasonal cafe",
+    "reason_text": "She wanted somewhere warm enough to talk and nice enough to feel like an occasion.",
+    "reason_tags": ["cozy", "conversation", "atmosphere"]
+  },
+  {
+    "prompt": "Choose an evening activity alone after rain.",
+    "category": "entertainment",
+    "context": {
+      "time_of_day": "evening",
+      "energy": "low",
+      "weather": "rainy",
+      "with": "alone"
+    },
+    "options": [
+      {"option_text": "Quiet indie film screening"},
+      {"option_text": "Scroll random clips at home"},
+      {"option_text": "Crowded club event"}
+    ],
+    "predicted_option_text": "Quiet indie film screening",
+    "actual_option_text": "Quiet indie film screening",
+    "reason_text": "It still felt intentional, but calm enough for a rainy evening.",
+    "reason_tags": ["indie", "calm", "intentional"]
+  }
+]

@@ -32,6 +32,7 @@ from bcd.profile.schemas import (
     UserOnboardingInput,
     UserProfileRead,
 )
+from bcd.showcase import get_demo_persona_paths
 from bcd.storage.models import (
     ActualChoiceFeedback,
     DecisionOption,
@@ -119,10 +120,11 @@ class ProfileService:
         self.repository = BCDRepository(session)
         self.card_renderer = ProfileCardRenderer()
 
-    def bootstrap_sample_profile(self) -> UserProfileRead:
+    def bootstrap_sample_profile(self, sample_id: str | None = None) -> UserProfileRead:
         """Create the sample profile and seed history if it does not exist."""
 
-        sample_profile = load_json(self.settings.sample_profile_path)
+        sample_profile_path, sample_decisions_path = self._resolve_sample_paths(sample_id)
+        sample_profile = load_json(sample_profile_path)
         existing = self.repository.get_user_profile(sample_profile["user_id"])
         if existing:
             merged_personality = _merge_nested_preferences(
@@ -185,7 +187,7 @@ class ProfileService:
             )
         )
 
-        seed_history = load_json(self.settings.sample_decisions_path)
+        seed_history = load_json(sample_decisions_path)
         for event in seed_history:
             request = self.repository.add(
                 DecisionRequest(
@@ -269,6 +271,11 @@ class ProfileService:
         bundle = self.get_profile_bundle(profile.user_id)
         self.ensure_profile_card(profile.user_id, bundle=bundle)
         return self.get_profile_bundle(profile.user_id)
+
+    def _resolve_sample_paths(self, sample_id: str | None) -> tuple:
+        if sample_id:
+            return get_demo_persona_paths(sample_id)
+        return self.settings.sample_profile_path, self.settings.sample_decisions_path
 
     def get_profile_bundle(self, user_id: str) -> UserProfileRead:
         """Return a profile together with the latest snapshot and counts."""

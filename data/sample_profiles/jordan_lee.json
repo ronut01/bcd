@@ -1,0 +1,52 @@
+{
+  "user_id": "sample-jordan",
+  "display_name": "Jordan Lee",
+  "profile_summary": "Jordan usually picks structured, efficient, and low-noise options. When time pressure rises, Jordan becomes even more likely to choose something reliable, clearly scoped, and easy to execute.",
+  "personality_signals": {
+    "decision_style": ["structured", "efficiency-focused", "risk-averse"],
+    "values": ["clarity", "reliability", "practical progress"],
+    "behavior_notes": [
+      "Avoids open-ended or chaotic options when there is work to do",
+      "Prefers practical purchases with clear value and dependable reviews"
+    ]
+  },
+  "long_term_preferences": {
+    "category_preferences": {
+      "study": {
+        "preferred_keywords": ["structured", "checklist", "focused", "clear", "practical", "time-boxed"],
+        "avoided_keywords": ["chaotic", "open-ended", "random", "overly ambitious"]
+      },
+      "shopping": {
+        "preferred_keywords": ["reliable", "durable", "adjustable", "reviewed", "value", "practical"],
+        "avoided_keywords": ["flashy", "fragile", "overpriced", "gimmick"]
+      },
+      "food": {
+        "preferred_keywords": ["clean", "protein", "simple", "routine", "fuel"],
+        "avoided_keywords": ["messy", "greasy", "indulgent", "slow"]
+      }
+    },
+    "context_preferences": {
+      "urgency_high": ["clear", "fast", "reliable", "finishable"],
+      "with_alone": ["focused", "quiet", "efficient", "simple"],
+      "time_of_day_morning": ["clean", "structured", "fresh", "focused"],
+      "time_of_day_night": ["simple", "low-friction", "done", "practical"],
+      "budget_sensitive": ["value", "durable", "worthwhile", "sensible"],
+      "energy_low": ["easy", "simple", "automatic", "routine"],
+      "energy_high": ["focused", "deliberate", "productive"]
+    }
+  },
+  "onboarding_answers": [
+    {
+      "question": "What makes a choice feel good to Jordan?",
+      "answer": "It is clear, efficient, and easy to justify."
+    },
+    {
+      "question": "What happens under deadline pressure?",
+      "answer": "Jordan chooses the most structured path and ignores the noisy alternatives."
+    },
+    {
+      "question": "How does Jordan shop?",
+      "answer": "By looking for practical quality and dependable reviews, not flashy upgrades."
+    }
+  ]
+}

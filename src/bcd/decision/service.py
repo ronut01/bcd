@@ -324,6 +324,8 @@ class DecisionService:
             agent_workflow=agent_workflow,
             option_influences=option_influences,
             agent_agreement=agent_agreement,
+            display_name=user.display_name,
+            effective_context=effective_context,
         )
         decision_audit = self._build_decision_audit(
             ranked=ranked,
@@ -953,10 +955,20 @@ class DecisionService:
         agent_workflow: AgentWorkflowTrace,
         option_influences: list[AgentOptionAssessment],
         agent_agreement: AgentAgreementSummary,
+        display_name: str,
+        effective_context: dict,
     ) -> ExplanationSections:
         top = ranked[0]
         runner_up = ranked[1] if len(ranked) > 1 else None
         top_assessment = option_influences[0]
+        top_reason = (
+            top_assessment.why_choose[0]
+            if top_assessment.why_choose
+            else top.scored_option.supporting_evidence[0]
+            if top.scored_option.supporting_evidence
+            else top.scored_option.reason_summary
+        )
+        context_summary = ", ".join(f"{key}={value}" for key, value in effective_context.items() if value)
         memory_evidence = [
             f"{memory.chosen_option_text}: {memory.why_retrieved[0] if memory.why_retrieved else memory.summary}"
             for memory in retrieved_memories[:3]
@@ -983,10 +995,31 @@ class DecisionService:
             losing_reasons.extend(adaptation_notes)
 
         return ExplanationSections(
-            top_choice_summary=(
-                f"{agent_workflow.profile_agent.conclusion} {agent_workflow.recent_state_agent.conclusion} "
-                f"{agent_workflow.memory_agent.conclusion} {agent_agreement.summary} That makes '{top.scored_option.option.option_text}' feel like "
-                "the most natural choice for this person right now."
+            top_choice_summary=" ".join(
+                part
+                for part in [
+                    (
+                        f"{display_name} is most likely to choose '{top.scored_option.option.option_text}' right now"
+                        f"{' under ' + context_summary if context_summary else ''}."
+                    ),
+                    " ".join(
+                        conclusion
+                        for conclusion in [
+                            agent_workflow.profile_agent.conclusion,
+                            agent_workflow.recent_state_agent.conclusion,
+                            agent_workflow.memory_agent.conclusion,
+                            agent_agreement.summary,
+                        ]
+                        if conclusion
+                    ),
+                    (
+                        f"It beats '{runner_up.scored_option.option.option_text}' because "
+                        f"{top_reason.lower() if top_reason else 'it has stronger combined support from stable profile, memory, and current context'}."
+                        if runner_up
+                        else "It has the strongest combined support from stable profile, memory, and recent context."
+                    ),
+                ]
+                if part
             ),
             why_this_option=top_assessment.why_choose[:4] or [top.scored_option.reason_summary],
             what_memories_mattered=memory_evidence or agent_workflow.memory_agent.observations[:3],

@@ -37,9 +37,10 @@
               <strong id="setup-metric-notes">0</strong>
             </div>
           </div>
-          <p>Keep setup here. Keep prediction focused on the decision itself.</p>
+          <p>Pick a persona fast, or build your own. The bundled demo personas are designed to make the first prediction feel immediately legible.</p>
           <div class="button-row inline">
             <a class="button-link primary" href="/app/predict">Open prediction workspace</a>
+            <button class="secondary" id="launch-signature-demo-button" type="button">Launch signature demo</button>
           </div>
         </aside>
       </section>
@@ -100,6 +101,20 @@
               <strong>Import ChatGPT export</strong>
               <p class="help">Upload a `.zip` or `conversations.json` for a starter profile.</p>
             </button>
+          </div>
+          <div class="top-gap">
+            <div class="section-header">
+              <div>
+                <span class="section-tag">Showcase</span>
+                <h3 class="top-gap-sm">Try a polished demo persona in one click</h3>
+              </div>
+            </div>
+            <div class="source-card-grid top-gap-sm" id="setup-persona-gallery">
+              <div class="source-card">
+                <strong>Loading personas...</strong>
+                <p class="help">Bundled demo personas will appear here.</p>
+              </div>
+            </div>
           </div>
           <div id="setup-existing-user-banner" class="list-card top-gap-sm hidden">
             <span class="mini">Existing active user</span>

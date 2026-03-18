@@ -1,0 +1,54 @@
+{
+  "user_id": "sample-maya",
+  "display_name": "Maya Patel",
+  "profile_summary": "Maya tends to choose options that feel thoughtful, curated, and socially well-matched. She is open to novelty when it feels tasteful and memorable, but she still notices price, effort, and whether the choice fits the mood.",
+  "personality_signals": {
+    "decision_style": ["taste-driven", "socially aware", "context-sensitive"],
+    "values": ["aesthetic quality", "meaningful experiences", "selective practicality"],
+    "behavior_notes": [
+      "Pays attention to atmosphere and whether a choice feels intentional",
+      "Will spend a bit more when the upgrade feels worth remembering"
+    ]
+  },
+  "long_term_preferences": {
+    "category_preferences": {
+      "entertainment": {
+        "preferred_keywords": ["jazz", "indie", "curated", "cozy", "gallery", "conversation", "memorable"],
+        "avoided_keywords": ["generic", "chaotic", "too loud", "sports bar", "crowded"]
+      },
+      "shopping": {
+        "preferred_keywords": ["thoughtful", "quality", "ceramic", "design", "useful", "beautiful"],
+        "avoided_keywords": ["flimsy", "generic", "clutter", "novelty junk"]
+      },
+      "food": {
+        "preferred_keywords": ["seasonal", "cozy", "shareable", "well-made", "cafe", "wine"],
+        "avoided_keywords": ["chain", "greasy", "rushed", "bland"]
+      }
+    },
+    "context_preferences": {
+      "with_friends": ["shared", "conversation", "warm", "curated", "memorable"],
+      "with_partner": ["intimate", "cozy", "beautiful", "easy"],
+      "with_alone": ["thoughtful", "calm", "restorative", "inspiring"],
+      "budget_sensitive": ["worthwhile", "quality", "not wasteful", "selective"],
+      "time_of_day_evening": ["ambient", "social", "warm", "dimly lit"],
+      "time_of_day_morning": ["fresh", "calm", "clean", "light"],
+      "energy_low": ["low-effort", "comfortable", "familiar", "easy"],
+      "energy_high": ["explore", "creative", "discover", "special"],
+      "weather_rainy": ["indoor", "warm", "cozy", "intimate"]
+    }
+  },
+  "onboarding_answers": [
+    {
+      "question": "What kind of choice usually feels right?",
+      "answer": "Something thoughtful, tasteful, and a little memorable."
+    },
+    {
+      "question": "What happens when Maya has energy for something fun?",
+      "answer": "She looks for an option that feels curated instead of generic."
+    },
+    {
+      "question": "How does price affect the decision?",
+      "answer": "She is not automatically cheap, but the upgrade has to feel worth it."
+    }
+  ]
+}

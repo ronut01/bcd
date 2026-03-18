@@ -1,0 +1,75 @@
+[
+  {
+    "prompt": "Pick a study plan for a deadline-heavy Saturday morning.",
+    "category": "study",
+    "context": {
+      "time_of_day": "morning",
+      "energy": "medium",
+      "urgency": "high",
+      "with": "alone"
+    },
+    "options": [
+      {"option_text": "Structured 90-minute checklist sprint"},
+      {"option_text": "Read six random papers"},
+      {"option_text": "Open-ended side project exploration"}
+    ],
+    "predicted_option_text": "Structured 90-minute checklist sprint",
+    "actual_option_text": "Structured 90-minute checklist sprint",
+    "reason_text": "It was the clearest plan with the highest chance of finishing something real.",
+    "reason_tags": ["structured", "deadline", "focused"]
+  },
+  {
+    "prompt": "Choose a laptop stand after too much comparison shopping.",
+    "category": "shopping",
+    "context": {
+      "time_of_day": "night",
+      "budget": "medium",
+      "urgency": "high"
+    },
+    "options": [
+      {"option_text": "Reliable adjustable stand with good reviews"},
+      {"option_text": "Ultra-cheap unstable stand"},
+      {"option_text": "Premium designer stand"}
+    ],
+    "predicted_option_text": "Reliable adjustable stand with good reviews",
+    "actual_option_text": "Reliable adjustable stand with good reviews",
+    "reason_text": "Jordan wanted the practical choice that solved the problem without more drama.",
+    "reason_tags": ["reliable", "value", "practical"]
+  },
+  {
+    "prompt": "Pick a quick lunch during a packed workday.",
+    "category": "food",
+    "context": {
+      "time_of_day": "afternoon",
+      "energy": "low",
+      "urgency": "high"
+    },
+    "options": [
+      {"option_text": "Simple rice bowl with protein"},
+      {"option_text": "Messy loaded burger"},
+      {"option_text": "Long sit-down brunch"}
+    ],
+    "predicted_option_text": "Simple rice bowl with protein",
+    "actual_option_text": "Simple rice bowl with protein",
+    "reason_text": "It was easy, clean, and kept the day moving.",
+    "reason_tags": ["simple", "efficient", "routine"]
+  },
+  {
+    "prompt": "Choose how to spend a free evening after a productive day.",
+    "category": "entertainment",
+    "context": {
+      "time_of_day": "night",
+      "energy": "medium",
+      "with": "alone"
+    },
+    "options": [
+      {"option_text": "Quiet documentary episode"},
+      {"option_text": "Chaotic multiplayer stream marathon"},
+      {"option_text": "Three-hour experimental film"}
+    ],
+    "predicted_option_text": "Quiet documentary episode",
+    "actual_option_text": "Quiet documentary episode",
+    "reason_text": "Jordan wanted something clear and interesting without it turning into a project.",
+    "reason_tags": ["quiet", "clear", "manageable"]
+  }
+]

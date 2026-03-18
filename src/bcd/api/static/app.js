@@ -1,6 +1,7 @@
 (function () {
   const ACTIVE_USER_KEY = "bcd.activeUserId";
   const LLM_STORAGE_KEY = "bcd.llmSettings";
+  const DEFAULT_SIGNATURE_SAMPLE_ID = "alex_chen";
   const DEFAULT_OPTIONS = ["Warm noodle soup", "Greasy burger", "Raw salad"];
   const FAILURE_REASON_OPTIONS = [
     { id: "stable_profile_wrong", label: "Stable profile was wrong" },
@@ -15,7 +16,10 @@
   const urlParams = new URLSearchParams(window.location.search);
   let onboardingQuestionnaire = null;
   let latestPrediction = null;
+  let latestPredictionPayload = null;
+  let latestPostFeedbackPrediction = null;
   let optionSuggestions = [];
+  let showcase = { personas: [], scenarios: [] };
   const setupState = {
     step: getActiveUserId() ? 3 : 1,
     source: null,
@@ -224,6 +228,15 @@
     return request(`/users/${encodeURIComponent(userId)}/history?limit=5`);
   }
 
+  async function fetchShowcase() {
+    return request("/demo/showcase");
+  }
+
+  async function bootstrapSampleProfile(sampleId) {
+    const query = sampleId ? `?sample_id=${encodeURIComponent(sampleId)}` : "";
+    return request(`/profiles/bootstrap-sample${query}`, { method: "POST" });
+  }
+
   function renderChipRow(containerId, values, emptyLabel = "None") {
     const container = $(containerId);
     if (!container) return;
@@ -242,6 +255,86 @@
       chip.textContent = value;
       container.appendChild(chip);
     });
+  }
+
+  function getPersonaBySampleId(sampleId) {
+    return (showcase.personas || []).find((item) => item.sample_id === sampleId) || null;
+  }
+
+  function getScenarioById(scenarioId) {
+    return (showcase.scenarios || []).find((item) => item.scenario_id === scenarioId) || null;
+  }
+
+  function getScenarioListForSample(sampleId) {
+    return (showcase.scenarios || []).filter((item) => item.sample_id === sampleId);
+  }
+
+  function getActivePersona() {
+    const activeUserId = getActiveUserId();
+    return (showcase.personas || []).find((item) => item.user_id === activeUserId) || null;
+  }
+
+  function formatContextSummary(context) {
+    const parts = Object.entries(context || {})
+      .filter(([, value]) => value !== null && value !== undefined && String(value).trim())
+      .map(([key, value]) => `${key}=${value}`);
+    return parts.join(" | ") || "none";
+  }
+
+  function createPredictUrl({
+    sampleId = "",
+    userId = "",
+    prompt = "",
+    category = "",
+    mode = "baseline",
+    context = {},
+    options = [],
+    autorun = false,
+    focus = "",
+  }) {
+    const base = new URL("/app/predict", window.location.origin);
+    if (sampleId) {
+      base.searchParams.set("sample_id", sampleId);
+    } else if (userId) {
+      base.searchParams.set("user_id", userId);
+    }
+    if (prompt) base.searchParams.set("prompt", prompt);
+    if (category) base.searchParams.set("category", category);
+    if (mode) base.searchParams.set("mode", mode);
+    Object.entries(context || {}).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && String(value).trim()) {
+        base.searchParams.set(key, value);
+      }
+    });
+    (options || []).forEach((optionText) => {
+      if (optionText && optionText.trim()) {
+        base.searchParams.append("option", optionText.trim());
+      }
+    });
+    if (autorun) base.searchParams.set("autorun", "1");
+    if (focus) base.searchParams.set("focus", focus);
+    return base.toString();
+  }
+
+  async function copyTextToClipboard(text, successMessage) {
+    if (!text) {
+      setStatus("Nothing is ready to copy yet.", true);
+      return;
+    }
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const helper = document.createElement("textarea");
+      helper.value = text;
+      helper.setAttribute("readonly", "readonly");
+      helper.style.position = "fixed";
+      helper.style.left = "-9999px";
+      document.body.appendChild(helper);
+      helper.select();
+      document.execCommand("copy");
+      helper.remove();
+    }
+    setStatus(successMessage);
   }
 
   function extractStableHighlights(profile) {
@@ -716,6 +809,128 @@
     title.textContent = profile ? profile.display_name : "Current profile";
   }
 
+  function renderSetupPersonaGallery() {
+    const gallery = $("setup-persona-gallery");
+    if (!gallery) return;
+    gallery.innerHTML = "";
+    if (!(showcase.personas || []).length) {
+      gallery.innerHTML = `
+        <div class="source-card">
+          <strong>No bundled personas available.</strong>
+          <p class="help">The showcase payload could not be loaded.</p>
+        </div>
+      `;
+      return;
+    }
+    showcase.personas.forEach((persona) => {
+      const scenario = getScenarioById(persona.default_scenario_id);
+      const card = document.createElement("div");
+      card.className = "source-card showcase-card";
+      card.innerHTML = `
+        <span class="section-tag">Bundled persona</span>
+        <strong>${escapeHtml(persona.display_name)}</strong>
+        <div class="mini">${escapeHtml(persona.headline)}</div>
+        <p class="help top-gap-sm">${escapeHtml(persona.description)}</p>
+        <div class="chip-row top-gap-sm">
+          ${(persona.tags || []).map((tag) => `<span class="chip">${escapeHtml(tag)}</span>`).join("")}
+        </div>
+        ${scenario ? `<div class="mini top-gap-sm">Signature demo: ${escapeHtml(scenario.title)}</div>` : ""}
+        <div class="button-row inline top-gap-sm">
+          <button class="secondary" type="button" data-load-persona="${escapeAttribute(persona.sample_id)}">Load persona</button>
+          <button class="primary" type="button" data-open-demo="${escapeAttribute(persona.sample_id)}">Open demo</button>
+        </div>
+      `;
+      card.querySelector("[data-load-persona]").addEventListener("click", async () => {
+        try {
+          setStatus(`Loading demo persona '${persona.display_name}'...`);
+          const payload = await bootstrapSampleProfile(persona.sample_id);
+          setActiveUserId(payload.user_id);
+          await hydrateReviewSummary();
+          setSetupStep(3);
+          setStatus(`Loaded '${persona.display_name}'. Review the summary or jump into prediction.`);
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      });
+      card.querySelector("[data-open-demo]").addEventListener("click", async () => {
+        try {
+          const payload = await bootstrapSampleProfile(persona.sample_id);
+          setActiveUserId(payload.user_id);
+          const nextUrl = createPredictUrl({
+            sampleId: persona.sample_id,
+            userId: payload.user_id,
+            prompt: scenario?.prompt || "",
+            category: scenario?.category || "food",
+            context: scenario?.context || {},
+            options: scenario?.options || [],
+            mode: "baseline",
+            autorun: true,
+          });
+          window.location.href = nextUrl;
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      });
+      gallery.appendChild(card);
+    });
+  }
+
+  function renderScenarioGallery() {
+    const gallery = $("scenario-gallery");
+    if (!gallery) return;
+    gallery.innerHTML = "";
+    const activePersona = getActivePersona();
+    const orderedScenarios = [...(showcase.scenarios || [])].sort((left, right) => {
+      const leftScore = left.sample_id === activePersona?.sample_id ? 0 : 1;
+      const rightScore = right.sample_id === activePersona?.sample_id ? 0 : 1;
+      return leftScore - rightScore;
+    });
+    if (!orderedScenarios.length) {
+      gallery.innerHTML = `
+        <div class="source-card">
+          <strong>No showcase scenarios available.</strong>
+          <p class="help">The gallery will appear here when the showcase payload loads.</p>
+        </div>
+      `;
+      return;
+    }
+    orderedScenarios.forEach((scenario) => {
+      const persona = getPersonaBySampleId(scenario.sample_id);
+      const card = document.createElement("div");
+      card.className = "source-card showcase-card";
+      card.innerHTML = `
+        <span class="section-tag">${escapeHtml(persona?.display_name || "Bundled persona")}</span>
+        <strong>${escapeHtml(scenario.title)}</strong>
+        <p class="help top-gap-sm">${escapeHtml(scenario.subtitle || "")}</p>
+        <div class="mini top-gap-sm">${escapeHtml(scenario.prompt)}</div>
+        <div class="chip-row top-gap-sm">
+          <span class="chip">${escapeHtml(scenario.category)}</span>
+          <span class="chip">${escapeHtml(formatContextSummary(scenario.context))}</span>
+        </div>
+        <div class="mini top-gap-sm">Options: ${escapeHtml((scenario.options || []).join(" | "))}</div>
+        <div class="button-row inline top-gap-sm">
+          <button class="secondary" type="button" data-fill-scenario="${escapeAttribute(scenario.scenario_id)}">Fill</button>
+          <button class="primary" type="button" data-run-scenario="${escapeAttribute(scenario.scenario_id)}">Run</button>
+        </div>
+      `;
+      card.querySelector("[data-fill-scenario]").addEventListener("click", async () => {
+        try {
+          await applyShowcaseScenario(scenario, { autorun: false });
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      });
+      card.querySelector("[data-run-scenario]").addEventListener("click", async () => {
+        try {
+          await applyShowcaseScenario(scenario, { autorun: true });
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      });
+      gallery.appendChild(card);
+    });
+  }
+
   async function loadOnboardingQuestionnaire() {
     const payload = await request("/profiles/onboarding-questionnaire");
     onboardingQuestionnaire = payload;
@@ -969,8 +1184,11 @@
 
   function prepareForNextPrediction() {
     latestPrediction = null;
+    latestPredictionPayload = null;
+    latestPostFeedbackPrediction = null;
     resetFeedbackState({ clearFields: true });
     $("feedback-panel").classList.add("hidden");
+    $("feedback-adaptation-panel")?.classList.add("hidden");
     $("prediction-empty").classList.remove("hidden");
     $("prediction-content").classList.add("hidden");
     $("metric-confidence").textContent = "-";
@@ -992,12 +1210,62 @@
     $("with").value = "";
     $("budget").value = "";
     $("urgency").value = "";
-    $("prediction-mode").value = "hybrid";
+    $("prediction-mode").value = "baseline";
     $("option-list").innerHTML = "";
     DEFAULT_OPTIONS.forEach(createOptionRow);
     clearOptionSuggestions();
-    $("metric-mode").textContent = "hybrid";
+    $("metric-mode").textContent = "baseline";
     prepareForNextPrediction();
+  }
+
+  async function ensureSampleLoaded(sampleId) {
+    const persona = getPersonaBySampleId(sampleId);
+    if (!persona) {
+      throw new Error(`Unknown demo persona '${sampleId}'.`);
+    }
+    if (getActiveUserId() === persona.user_id) {
+      return persona.user_id;
+    }
+    const payload = await bootstrapSampleProfile(sampleId);
+    setActiveUserId(payload.user_id);
+    if (page === "setup") {
+      await hydrateReviewSummary();
+      setSetupStep(3);
+    }
+    if (page === "predict") {
+      await hydratePredictWorkspace();
+    }
+    return payload.user_id;
+  }
+
+  function applyScenarioToForm(scenario) {
+    if (!scenario) return;
+    $("category").value = scenario.category || "custom";
+    $("prompt").value = scenario.prompt || "";
+    $("time_of_day").value = scenario.context?.time_of_day || "";
+    $("energy").value = scenario.context?.energy || "";
+    $("weather").value = scenario.context?.weather || "";
+    $("with").value = scenario.context?.with || "";
+    $("budget").value = scenario.context?.budget || "";
+    $("urgency").value = scenario.context?.urgency || "";
+    $("prediction-mode").value = "baseline";
+    $("metric-mode").textContent = "baseline";
+    $("option-list").innerHTML = "";
+    (scenario.options || []).forEach((optionText) => createOptionRow(optionText));
+    clearOptionSuggestions();
+    prepareForNextPrediction();
+  }
+
+  async function applyShowcaseScenario(scenario, { autorun = false } = {}) {
+    if (!scenario) return;
+    if (scenario.sample_id) {
+      await ensureSampleLoaded(scenario.sample_id);
+    }
+    applyScenarioToForm(scenario);
+    setStatus(`Loaded showcase scenario '${scenario.title}'.`);
+    if (autorun) {
+      await runPredictionFromForm();
+    }
   }
 
   function getContextPayload() {
@@ -1033,14 +1301,112 @@
     return payload;
   }
 
+  function getCurrentScenarioLink({ autorun = true, focus = "" } = {}) {
+    const payload = getPredictionPayload();
+    const activePersona = getActivePersona();
+    return createPredictUrl({
+      sampleId: activePersona?.sample_id || "",
+      userId: activePersona ? "" : payload.user_id,
+      prompt: payload.prompt,
+      category: payload.category,
+      mode: payload.prediction_mode || "baseline",
+      context: payload.context,
+      options: payload.options.map((item) => item.option_text),
+      autorun,
+      focus,
+    });
+  }
+
+  function buildPredictionSummaryText(prediction = latestPrediction) {
+    if (!prediction) return "";
+    const runnerUp = prediction.ranked_options[1];
+    const activeUser = $("predict-user-name")?.textContent || $("user-display-name")?.value || prediction.user_id || "This user";
+    const evidence = prediction.explanation_sections.why_this_option.slice(0, 2).join(" | ");
+    return [
+      `bcd prediction for ${activeUser}:`,
+      `Question: ${$("prompt")?.value.trim() || ""}`,
+      `Predicted choice: ${prediction.predicted_option_text} (${Math.round(prediction.confidence * 100)}% confidence)`,
+      runnerUp ? `Runner-up: ${runnerUp.option_text} (${Math.round(runnerUp.confidence * 100)}%)` : "",
+      `Why it won: ${prediction.explanation_sections.top_choice_summary}`,
+      evidence ? `Key evidence: ${evidence}` : "",
+      `Scenario link: ${getCurrentScenarioLink({ autorun: true, focus: "prediction-content" })}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function getRankPosition(prediction, optionText) {
+    return prediction.ranked_options.findIndex((item) => item.option_text === optionText);
+  }
+
+  function getRankedOptionByText(prediction, optionText) {
+    return prediction.ranked_options.find((item) => item.option_text === optionText) || null;
+  }
+
+  function renderWinnerComparison(prediction) {
+    const runnerUp = prediction.ranked_options[1];
+    $("winner-vs-runner-up-title").textContent = runnerUp
+      ? `${prediction.predicted_option_text} beat ${runnerUp.option_text}`
+      : `${prediction.predicted_option_text} is the only viable fit`;
+    $("winner-vs-runner-up-summary").textContent = runnerUp
+      ? `The winning margin is ${Math.round(prediction.decision_audit.margin_vs_runner_up * 100)} points. This is the closest realistic alternative the system considered.`
+      : "Only one clear fit stood out after combining profile, memory, and recent context.";
+    const points = [
+      ...prediction.explanation_sections.why_this_option.slice(0, 2),
+      ...prediction.explanation_sections.why_other_options_lost.slice(0, 2),
+    ].slice(0, 4);
+    renderEvidenceList(
+      "winner-vs-runner-up-points",
+      points,
+      "A direct winner-vs-runner-up explanation will appear here.",
+    );
+  }
+
+  function renderFeedbackAdaptation(beforePrediction, afterPrediction, actualOptionText) {
+    const panel = $("feedback-adaptation-panel");
+    const summary = $("feedback-adaptation-summary");
+    if (!panel || !summary || !actualOptionText) return;
+    const beforeRank = getRankPosition(beforePrediction, actualOptionText);
+    const afterRank = getRankPosition(afterPrediction, actualOptionText);
+    const beforeItem = getRankedOptionByText(beforePrediction, actualOptionText);
+    const afterItem = getRankedOptionByText(afterPrediction, actualOptionText);
+    const points = [];
+    if (beforeRank >= 0 && afterRank >= 0) {
+      const movement = beforeRank - afterRank;
+      if (movement > 0) {
+        points.push(`'${actualOptionText}' moved up from #${beforeRank + 1} to #${afterRank + 1} after the feedback was written into memory.`);
+      } else if (movement < 0) {
+        points.push(`'${actualOptionText}' moved down from #${beforeRank + 1} to #${afterRank + 1}, showing the new evidence changed the ranking in a non-trivial way.`);
+      } else {
+        points.push(`'${actualOptionText}' stayed at #${afterRank + 1}, but the stored feedback still updated memory and recent-state signals.`);
+      }
+    }
+    if (beforeItem && afterItem) {
+      const confidenceDelta = Math.round((afterItem.confidence - beforeItem.confidence) * 100);
+      const deltaLabel = confidenceDelta > 0 ? `+${confidenceDelta}` : `${confidenceDelta}`;
+      points.push(`Confidence for '${actualOptionText}' changed by ${deltaLabel} points on the rerun.`);
+    }
+    if (beforePrediction.predicted_option_text !== afterPrediction.predicted_option_text) {
+      points.push(`The predicted winner changed from '${beforePrediction.predicted_option_text}' to '${afterPrediction.predicted_option_text}'.`);
+    } else {
+      points.push(`The winner stayed '${afterPrediction.predicted_option_text}', but the supporting evidence was refreshed by the new memory and snapshot.`);
+    }
+    summary.textContent = `After feedback, bcd reran the same scenario and recomputed the ranking with the newly stored memory, updated snapshot, and fresh adaptation signals.`;
+    renderEvidenceList("feedback-adaptation-points", points, "No adaptation changes were detected yet.");
+    panel.classList.remove("hidden");
+  }
+
   function renderPrediction(prediction) {
     latestPrediction = prediction;
+    latestPostFeedbackPrediction = null;
     resetFeedbackState({ clearFields: true });
+    $("feedback-adaptation-panel")?.classList.add("hidden");
     $("prediction-empty").classList.add("hidden");
     $("prediction-content").classList.remove("hidden");
     $("feedback-panel").classList.remove("hidden");
     openPredictionModal();
     $("predicted-option-text").textContent = prediction.predicted_option_text;
+    $("predicted-option-subtitle").textContent = `${$("predict-user-name")?.textContent || "This user"} under ${formatContextSummary(prediction.decision_audit.active_context || {})}`;
     $("prediction-explanation").textContent = prediction.explanation_sections.top_choice_summary;
     $("strategy-chip").textContent = `strategy: ${prediction.strategy}`;
     $("llm-chip").textContent = `llm used: ${prediction.llm_used ? `yes (${prediction.llm_provider || "configured"})` : "no"}`;
@@ -1067,6 +1433,7 @@
     $("audit-context-chip").textContent = `context: ${Object.entries(prediction.decision_audit.active_context || {})
       .map(([key, value]) => `${key}=${value}`)
       .join(" | ") || "none"}`;
+    renderWinnerComparison(prediction);
     renderEvidenceList("audit-decisive-factors", prediction.decision_audit.decisive_factors, "No decisive factors were captured.");
     renderEvidenceList("audit-watchouts", prediction.decision_audit.watchouts, "No specific watchouts were captured.");
     renderEvidenceList("audit-adaptation-signals", prediction.decision_audit.adaptation_signals, "No adaptation signals were active.");
@@ -1215,6 +1582,7 @@
       emptyState.classList.add("hidden");
       workspace.classList.remove("hidden");
       banner.classList.remove("hidden");
+      renderScenarioGallery();
     } catch (error) {
       emptyState.classList.remove("hidden");
       workspace.classList.add("hidden");
@@ -1337,7 +1705,7 @@
     $("choose-source-sample").addEventListener("click", async () => {
       try {
         setStatus("Loading sample profile...");
-        const payload = await request("/profiles/bootstrap-sample", { method: "POST" });
+        const payload = await bootstrapSampleProfile(DEFAULT_SIGNATURE_SAMPLE_ID);
         setActiveUserId(payload.user_id);
         await hydrateReviewSummary();
         setSetupStep(3);
@@ -1364,6 +1732,30 @@
     $("resume-existing-user-button").addEventListener("click", async () => {
       await hydrateReviewSummary();
       setSetupStep(3);
+    });
+
+    $("launch-signature-demo-button").addEventListener("click", async () => {
+      try {
+        const persona = getPersonaBySampleId(DEFAULT_SIGNATURE_SAMPLE_ID) || showcase.personas[0];
+        const scenario = getScenarioById(persona?.default_scenario_id);
+        if (!persona || !scenario) {
+          throw new Error("The signature demo is not available right now.");
+        }
+        const payload = await bootstrapSampleProfile(persona.sample_id);
+        setActiveUserId(payload.user_id);
+        window.location.href = createPredictUrl({
+          sampleId: persona.sample_id,
+          userId: payload.user_id,
+          prompt: scenario.prompt,
+          category: scenario.category,
+          context: scenario.context,
+          options: scenario.options,
+          mode: "baseline",
+          autorun: true,
+        });
+      } catch (error) {
+        setStatus(error.message, true);
+      }
     });
 
     $("structured-back-button").addEventListener("click", () => {
@@ -1448,6 +1840,7 @@
     });
 
     renderExistingUserBanner();
+    renderSetupPersonaGallery();
     setSetupStep(setupState.step);
   }
 
@@ -1456,15 +1849,54 @@
     loadSavedLlmSettings();
     wireLlmButtons();
     resetPredictionForm();
+    renderScenarioGallery();
     $("add-option-button").addEventListener("click", () => {
       if (createOptionRow("")) {
         setStatus("Added another option slot.");
       }
     });
     $("reset-button").addEventListener("click", resetPredictionForm);
+    $("copy-scenario-link-button").addEventListener("click", async () => {
+      try {
+        await copyTextToClipboard(getCurrentScenarioLink({ autorun: true }), "Copied a runnable scenario link.");
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    });
+    $("copy-result-summary-button").addEventListener("click", async () => {
+      try {
+        await copyTextToClipboard(
+          latestPrediction ? buildPredictionSummaryText(latestPrediction) : getCurrentScenarioLink({ autorun: true }),
+          latestPrediction ? "Copied the result summary." : "Copied the runnable scenario link.",
+        );
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    });
     $("close-prediction-button").addEventListener("click", closePredictionModal);
     $("edit-prediction-button").addEventListener("click", closePredictionModal);
     $("prediction-modal-backdrop").addEventListener("click", closePredictionModal);
+    $("copy-result-link-button").addEventListener("click", async () => {
+      try {
+        await copyTextToClipboard(
+          getCurrentScenarioLink({ autorun: true, focus: "prediction-content" }),
+          "Copied a rerunnable result link.",
+        );
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    });
+    $("copy-result-text-button").addEventListener("click", async () => {
+      try {
+        if (!latestPrediction) {
+          setStatus("Run a prediction before copying the result text.", true);
+          return;
+        }
+        await copyTextToClipboard(buildPredictionSummaryText(latestPrediction), "Copied the result text.");
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    });
     $("suggest-options-button").addEventListener("click", async () => {
       try {
         await suggestOptionsFromCurrentForm();
@@ -1524,6 +1956,21 @@
           `Saved actual choice '${feedback.actual_option_text}'. Memory and profile snapshot were updated.`,
         );
         setStatus("Feedback saved. Future predictions can now adapt to this choice.");
+        if (latestPredictionPayload) {
+          try {
+            const rerunPrediction = await request("/decisions/predict", {
+              method: "POST",
+              body: JSON.stringify(latestPredictionPayload),
+            });
+            latestPostFeedbackPrediction = rerunPrediction;
+            renderFeedbackAdaptation(latestPrediction, rerunPrediction, feedback.actual_option_text);
+          } catch (rerunError) {
+            setFeedbackSaveNote(
+              `Saved actual choice '${feedback.actual_option_text}', but the automatic rerun failed: ${rerunError.message}`,
+              true,
+            );
+          }
+        }
       } catch (error) {
         if (error.message === "Feedback has already been recorded for this prediction.") {
           setFeedbackButtonState(true, "Feedback saved");
@@ -1550,6 +1997,7 @@
         return;
       }
       prepareForNextPrediction();
+      latestPredictionPayload = JSON.parse(JSON.stringify(payload));
       setStatus("Running prediction...");
       const prediction = await request("/decisions/predict", {
         method: "POST",
@@ -1634,8 +2082,19 @@
     focusDemoSectionFromUrl();
   }
 
+  async function ensureSampleFromUrlIfNeeded() {
+    const sampleId = (urlParams.get("sample_id") || "").trim();
+    if (!sampleId) return;
+    await ensureSampleLoaded(sampleId);
+  }
+
   async function init() {
     try {
+      try {
+        showcase = await fetchShowcase();
+      } catch (_) {
+        showcase = { personas: [], scenarios: [] };
+      }
       applyUrlStateOverrides();
       ensureErrorModal();
       if (page === "setup") {
@@ -1648,6 +2107,7 @@
       }
       if (page === "predict") {
         wirePredictPage();
+        await ensureSampleFromUrlIfNeeded();
         await hydratePredictWorkspace();
         applyPredictUrlOverrides();
         await runPredictAutomationFromUrl();

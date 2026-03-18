@@ -32,6 +32,7 @@ from bcd.profile.schemas import (
 )
 from bcd.profile.service import ProfileService
 from bcd.reflection.service import ReflectionService
+from bcd.showcase import get_demo_showcase
 from bcd.storage.database import get_engine, init_db
 
 
@@ -105,11 +106,18 @@ def create_app() -> FastAPI:
         return FileResponse(asset_path, media_type=media_type, headers=no_cache_headers)
 
     @app.post("/profiles/bootstrap-sample", response_model=UserProfileRead)
-    def bootstrap_sample_profile(session: Session = Depends(get_session)):
+    def bootstrap_sample_profile(
+        sample_id: str | None = Query(default=None),
+        session: Session = Depends(get_session),
+    ):
         try:
-            return ProfileService(session).bootstrap_sample_profile()
+            return ProfileService(session).bootstrap_sample_profile(sample_id=sample_id)
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/demo/showcase")
+    def get_showcase():
+        return get_demo_showcase()
 
     @app.get("/profiles/onboarding-questionnaire", response_model=OnboardingQuestionnaireRead)
     def get_onboarding_questionnaire(session: Session = Depends(get_session)):
