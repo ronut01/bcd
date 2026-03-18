@@ -20,6 +20,7 @@
   let latestPostFeedbackPrediction = null;
   let optionSuggestions = [];
   let showcase = { personas: [], scenarios: [] };
+  let activeScenarioId = (urlParams.get("scenario_id") || "").trim();
   const setupState = {
     step: getActiveUserId() ? 3 : 1,
     source: null,
@@ -74,6 +75,7 @@
 
   function applyPredictUrlOverrides() {
     if (page !== "predict") return;
+    activeScenarioId = (urlParams.get("scenario_id") || activeScenarioId || "").trim();
     const fieldMap = {
       category: "category",
       prompt: "prompt",
@@ -96,6 +98,7 @@
       $("option-list").innerHTML = "";
       options.slice(0, 5).forEach((optionText) => createOptionRow(optionText));
     }
+    renderScenarioSpotlight();
   }
 
   async function request(path, options = {}) {
@@ -265,6 +268,24 @@
     return (showcase.scenarios || []).find((item) => item.scenario_id === scenarioId) || null;
   }
 
+  function getActiveScenario() {
+    if (!activeScenarioId) {
+      return null;
+    }
+    return getScenarioById(activeScenarioId);
+  }
+
+  function getSpotlightScenario() {
+    if (activeScenarioId) {
+      return getScenarioById(activeScenarioId);
+    }
+    const activePersona = getActivePersona();
+    if (!activePersona?.default_scenario_id) {
+      return null;
+    }
+    return getScenarioById(activePersona.default_scenario_id);
+  }
+
   function getScenarioListForSample(sampleId) {
     return (showcase.scenarios || []).filter((item) => item.sample_id === sampleId);
   }
@@ -283,6 +304,7 @@
 
   function createPredictUrl({
     sampleId = "",
+    scenarioId = "",
     userId = "",
     prompt = "",
     category = "",
@@ -298,6 +320,7 @@
     } else if (userId) {
       base.searchParams.set("user_id", userId);
     }
+    if (scenarioId) base.searchParams.set("scenario_id", scenarioId);
     if (prompt) base.searchParams.set("prompt", prompt);
     if (category) base.searchParams.set("category", category);
     if (mode) base.searchParams.set("mode", mode);
@@ -314,6 +337,28 @@
     if (autorun) base.searchParams.set("autorun", "1");
     if (focus) base.searchParams.set("focus", focus);
     return base.toString();
+  }
+
+  function clearActiveScenario() {
+    if (!activeScenarioId) return;
+    activeScenarioId = "";
+    renderScenarioSpotlight();
+    renderScenarioGallery();
+    renderShowcaseFeedbackDemo();
+  }
+
+  function getPrimaryDecisiveFactor(prediction) {
+    return prediction.decision_audit.decisive_factors[0]
+      || prediction.explanation_sections.why_this_option[0]
+      || prediction.explanation_sections.top_choice_summary
+      || "No decisive factor was captured.";
+  }
+
+  function getPrimaryGapReason(prediction) {
+    return prediction.explanation_sections.why_other_options_lost[0]
+      || prediction.ranked_options[1]?.counter_evidence?.[0]
+      || prediction.ranked_options[1]?.reason_summary
+      || "No losing signal was captured.";
   }
 
   async function copyTextToClipboard(text, successMessage) {
@@ -809,6 +854,41 @@
     title.textContent = profile ? profile.display_name : "Current profile";
   }
 
+  function renderScenarioSpotlight() {
+    const panel = $("scenario-spotlight");
+    const title = $("scenario-spotlight-title");
+    const takeaway = $("scenario-spotlight-takeaway");
+    const chips = $("scenario-spotlight-chips");
+    const feedback = $("scenario-spotlight-feedback");
+    if (!panel || !title || !takeaway || !chips || !feedback) return;
+    const scenario = getSpotlightScenario();
+    const persona = scenario ? getPersonaBySampleId(scenario.sample_id) : getActivePersona();
+    if (!scenario || !persona) {
+      panel.classList.add("hidden");
+      chips.innerHTML = "";
+      return;
+    }
+    panel.classList.remove("hidden");
+    title.textContent = `${scenario.title} for ${persona.display_name}`;
+    takeaway.textContent = scenario.demo_takeaway || scenario.subtitle || "A bundled showcase scenario is active.";
+    chips.innerHTML = "";
+    [
+      `${scenario.category} demo`,
+      persona.headline,
+      scenario.context?.energy ? `energy=${scenario.context.energy}` : "",
+    ]
+      .filter(Boolean)
+      .forEach((label) => {
+        const chip = document.createElement("span");
+        chip.className = "chip";
+        chip.textContent = label;
+        chips.appendChild(chip);
+      });
+    feedback.textContent = scenario.feedback_demo
+      ? `Feedback twist: ${scenario.feedback_demo.expected_effect}`
+      : "No bundled feedback twist is attached to this scenario.";
+  }
+
   function renderSetupPersonaGallery() {
     const gallery = $("setup-persona-gallery");
     if (!gallery) return;
@@ -825,12 +905,13 @@
     showcase.personas.forEach((persona) => {
       const scenario = getScenarioById(persona.default_scenario_id);
       const card = document.createElement("div");
-      card.className = "source-card showcase-card";
+      card.className = `source-card showcase-card${activeScenarioId === scenario.scenario_id ? " active-showcase" : ""}`;
       card.innerHTML = `
         <span class="section-tag">Bundled persona</span>
         <strong>${escapeHtml(persona.display_name)}</strong>
         <div class="mini">${escapeHtml(persona.headline)}</div>
         <p class="help top-gap-sm">${escapeHtml(persona.description)}</p>
+        <div class="mini top-gap-sm">${escapeHtml(persona.signature_hook || "")}</div>
         <div class="chip-row top-gap-sm">
           ${(persona.tags || []).map((tag) => `<span class="chip">${escapeHtml(tag)}</span>`).join("")}
         </div>
@@ -858,6 +939,7 @@
           setActiveUserId(payload.user_id);
           const nextUrl = createPredictUrl({
             sampleId: persona.sample_id,
+            scenarioId: scenario?.scenario_id || "",
             userId: payload.user_id,
             prompt: scenario?.prompt || "",
             category: scenario?.category || "food",
@@ -897,32 +979,38 @@
     orderedScenarios.forEach((scenario) => {
       const persona = getPersonaBySampleId(scenario.sample_id);
       const card = document.createElement("div");
-      card.className = "source-card showcase-card";
+      card.className = `source-card showcase-card${activeScenarioId === scenario.scenario_id ? " active-showcase" : ""}`;
       card.innerHTML = `
         <span class="section-tag">${escapeHtml(persona?.display_name || "Bundled persona")}</span>
         <strong>${escapeHtml(scenario.title)}</strong>
         <p class="help top-gap-sm">${escapeHtml(scenario.subtitle || "")}</p>
+        <div class="mini top-gap-sm">${escapeHtml(scenario.demo_takeaway || "")}</div>
         <div class="mini top-gap-sm">${escapeHtml(scenario.prompt)}</div>
         <div class="chip-row top-gap-sm">
           <span class="chip">${escapeHtml(scenario.category)}</span>
           <span class="chip">${escapeHtml(formatContextSummary(scenario.context))}</span>
         </div>
+        ${
+          scenario.feedback_demo
+            ? `<div class="mini top-gap-sm">Feedback twist: ${escapeHtml(scenario.feedback_demo.expected_effect)}</div>`
+            : ""
+        }
         <div class="mini top-gap-sm">Options: ${escapeHtml((scenario.options || []).join(" | "))}</div>
         <div class="button-row inline top-gap-sm">
-          <button class="secondary" type="button" data-fill-scenario="${escapeAttribute(scenario.scenario_id)}">Fill</button>
-          <button class="primary" type="button" data-run-scenario="${escapeAttribute(scenario.scenario_id)}">Run</button>
+          <button class="secondary" type="button" data-fill-scenario="${escapeAttribute(scenario.scenario_id)}">Load clean demo</button>
+          <button class="primary" type="button" data-run-scenario="${escapeAttribute(scenario.scenario_id)}">Run clean demo</button>
         </div>
       `;
       card.querySelector("[data-fill-scenario]").addEventListener("click", async () => {
         try {
-          await applyShowcaseScenario(scenario, { autorun: false });
+          await applyShowcaseScenario(scenario, { autorun: false, resetProfile: true });
         } catch (error) {
           setStatus(error.message, true);
         }
       });
       card.querySelector("[data-run-scenario]").addEventListener("click", async () => {
         try {
-          await applyShowcaseScenario(scenario, { autorun: true });
+          await applyShowcaseScenario(scenario, { autorun: true, resetProfile: true });
         } catch (error) {
           setStatus(error.message, true);
         }
@@ -1017,11 +1105,15 @@
       <input type="text" value="${escapeAttribute(value)}" placeholder="Candidate option" />
       <button class="danger" type="button">Remove</button>
     `;
-    row.querySelector("input").addEventListener("input", syncOptionSuggestionButtons);
+    row.querySelector("input").addEventListener("input", () => {
+      syncOptionSuggestionButtons();
+      clearActiveScenario();
+    });
     row.querySelector("button").addEventListener("click", () => {
       if (optionList.children.length > 2) {
         row.remove();
         syncOptionSuggestionButtons();
+        clearActiveScenario();
       } else {
         setStatus("At least two options are required.", true);
       }
@@ -1163,6 +1255,7 @@
     setFeedbackButtonState(false, "Save feedback");
     setFeedbackSaveNote("");
     renderModelUpdate(null);
+    renderShowcaseFeedbackDemo();
   }
 
   function parseContextUpdates() {
@@ -1192,11 +1285,13 @@
     $("prediction-empty").classList.remove("hidden");
     $("prediction-content").classList.add("hidden");
     $("metric-confidence").textContent = "-";
+    renderShowcaseFeedbackDemo();
     closePredictionModal();
   }
 
   function resetPredictionForm() {
     if (page !== "predict") return;
+    activeScenarioId = "";
     $("user-id").value = getActiveUserId();
     if ($("user-display-name")) {
       const visibleName = $("predict-user-name")?.textContent || "";
@@ -1215,15 +1310,16 @@
     DEFAULT_OPTIONS.forEach(createOptionRow);
     clearOptionSuggestions();
     $("metric-mode").textContent = "baseline";
+    renderScenarioSpotlight();
     prepareForNextPrediction();
   }
 
-  async function ensureSampleLoaded(sampleId) {
+  async function ensureSampleLoaded(sampleId, { reset = false } = {}) {
     const persona = getPersonaBySampleId(sampleId);
     if (!persona) {
       throw new Error(`Unknown demo persona '${sampleId}'.`);
     }
-    if (getActiveUserId() === persona.user_id) {
+    if (!reset && getActiveUserId() === persona.user_id) {
       return persona.user_id;
     }
     const payload = await bootstrapSampleProfile(sampleId);
@@ -1240,6 +1336,7 @@
 
   function applyScenarioToForm(scenario) {
     if (!scenario) return;
+    activeScenarioId = scenario.scenario_id || "";
     $("category").value = scenario.category || "custom";
     $("prompt").value = scenario.prompt || "";
     $("time_of_day").value = scenario.context?.time_of_day || "";
@@ -1253,16 +1350,18 @@
     $("option-list").innerHTML = "";
     (scenario.options || []).forEach((optionText) => createOptionRow(optionText));
     clearOptionSuggestions();
+    renderScenarioSpotlight();
+    renderScenarioGallery();
     prepareForNextPrediction();
   }
 
-  async function applyShowcaseScenario(scenario, { autorun = false } = {}) {
+  async function applyShowcaseScenario(scenario, { autorun = false, resetProfile = true } = {}) {
     if (!scenario) return;
     if (scenario.sample_id) {
-      await ensureSampleLoaded(scenario.sample_id);
+      await ensureSampleLoaded(scenario.sample_id, { reset: resetProfile });
     }
     applyScenarioToForm(scenario);
-    setStatus(`Loaded showcase scenario '${scenario.title}'.`);
+    setStatus(`Loaded clean showcase scenario '${scenario.title}'.`);
     if (autorun) {
       await runPredictionFromForm();
     }
@@ -1306,6 +1405,7 @@
     const activePersona = getActivePersona();
     return createPredictUrl({
       sampleId: activePersona?.sample_id || "",
+      scenarioId: activeScenarioId,
       userId: activePersona ? "" : payload.user_id,
       prompt: payload.prompt,
       category: payload.category,
@@ -1322,11 +1422,15 @@
     const runnerUp = prediction.ranked_options[1];
     const activeUser = $("predict-user-name")?.textContent || $("user-display-name")?.value || prediction.user_id || "This user";
     const evidence = prediction.explanation_sections.why_this_option.slice(0, 2).join(" | ");
+    const decisiveFactor = getPrimaryDecisiveFactor(prediction);
+    const scenario = getActiveScenario();
     return [
       `bcd prediction for ${activeUser}:`,
+      scenario ? `Showcase: ${scenario.title}` : "",
       `Question: ${$("prompt")?.value.trim() || ""}`,
       `Predicted choice: ${prediction.predicted_option_text} (${Math.round(prediction.confidence * 100)}% confidence)`,
       runnerUp ? `Runner-up: ${runnerUp.option_text} (${Math.round(runnerUp.confidence * 100)}%)` : "",
+      `Decisive factor: ${decisiveFactor}`,
       `Why it won: ${prediction.explanation_sections.top_choice_summary}`,
       evidence ? `Key evidence: ${evidence}` : "",
       `Scenario link: ${getCurrentScenarioLink({ autorun: true, focus: "prediction-content" })}`,
@@ -1362,6 +1466,63 @@
     );
   }
 
+  function renderDecisionSnapshot(prediction) {
+    const runnerUp = prediction.ranked_options[1];
+    const decisiveFactor = getPrimaryDecisiveFactor(prediction);
+    const losingReason = getPrimaryGapReason(prediction);
+    $("snapshot-predicted-choice").textContent = prediction.predicted_option_text;
+    $("snapshot-predicted-summary").textContent = `${Math.round(prediction.confidence * 100)}% confidence with ${prediction.decision_audit.confidence_label} conviction.`;
+    $("snapshot-runner-up").textContent = runnerUp ? runnerUp.option_text : "No serious runner-up";
+    $("snapshot-runner-up-summary").textContent = runnerUp
+      ? `${Math.round(runnerUp.confidence * 100)}% confidence. Margin: ${Math.round(prediction.decision_audit.margin_vs_runner_up * 100)} points.`
+      : "Only one clear option stood up to the profile, memory, and current context.";
+    $("snapshot-decisive-factor").textContent = decisiveFactor;
+    $("snapshot-decisive-summary").textContent = prediction.explanation_sections.why_this_option[0]
+      || prediction.explanation_sections.top_choice_summary;
+    $("snapshot-gap-label").textContent = runnerUp ? `${runnerUp.option_text} lost on fit` : "No direct comparison";
+    $("snapshot-gap-summary").textContent = losingReason;
+  }
+
+  function renderShowcaseFeedbackDemo(prediction = latestPrediction) {
+    const panel = $("showcase-feedback-demo-panel");
+    const title = $("showcase-feedback-demo-title");
+    const summary = $("showcase-feedback-demo-summary");
+    const button = $("apply-showcase-feedback-button");
+    if (!panel || !title || !summary || !button) return;
+    const scenario = getActiveScenario();
+    const feedbackDemo = scenario?.feedback_demo;
+    if (!scenario || !feedbackDemo || !prediction) {
+      panel.classList.add("hidden");
+      button.textContent = "Apply showcase feedback";
+      button.disabled = false;
+      return;
+    }
+    const matchedOption = prediction.ranked_options.find((item) => item.option_text === feedbackDemo.actual_option_text);
+    panel.classList.remove("hidden");
+    title.textContent = feedbackDemo.title || "Run the showcase feedback twist";
+    summary.textContent = feedbackDemo.expected_effect || "Apply the bundled feedback and rerun the same scenario.";
+    button.textContent = "Apply showcase feedback";
+    button.disabled = !matchedOption;
+    if (!matchedOption) {
+      summary.textContent = `This demo expects '${feedbackDemo.actual_option_text}', but that option is not part of the current result set.`;
+    }
+  }
+
+  function populateFeedbackFormFromDemo(feedbackDemo, prediction) {
+    const matchedOption = prediction.ranked_options.find((item) => item.option_text === feedbackDemo.actual_option_text);
+    if (!matchedOption) {
+      throw new Error(`The showcase feedback option '${feedbackDemo.actual_option_text}' is not in the current result.`);
+    }
+    $("actual-option").value = matchedOption.option_id;
+    $("reason-text").value = feedbackDemo.reason_text || "";
+    $("reason-tags").value = (feedbackDemo.reason_tags || []).join(", ");
+    $("preference-shift-note").value = feedbackDemo.preference_shift_note || "";
+    $("context-updates").value = JSON.stringify(feedbackDemo.context_updates || {});
+    document.querySelectorAll("#failure-reason-list input").forEach((node) => {
+      node.checked = (feedbackDemo.failure_reasons || []).includes(node.value);
+    });
+  }
+
   function renderFeedbackAdaptation(beforePrediction, afterPrediction, actualOptionText) {
     const panel = $("feedback-adaptation-panel");
     const summary = $("feedback-adaptation-summary");
@@ -1391,6 +1552,16 @@
     } else {
       points.push(`The winner stayed '${afterPrediction.predicted_option_text}', but the supporting evidence was refreshed by the new memory and snapshot.`);
     }
+    $("feedback-before-winner").textContent = beforePrediction.predicted_option_text;
+    $("feedback-before-summary").textContent = `${Math.round(beforePrediction.confidence * 100)}% confidence before the new memory was written.`;
+    $("feedback-after-winner").textContent = afterPrediction.predicted_option_text;
+    $("feedback-after-summary").textContent = `${Math.round(afterPrediction.confidence * 100)}% confidence after the rerun.`;
+    $("feedback-actual-movement").textContent = beforeRank >= 0 && afterRank >= 0
+      ? `#${beforeRank + 1} -> #${afterRank + 1}`
+      : actualOptionText;
+    $("feedback-actual-summary").textContent = beforeItem && afterItem
+      ? `${actualOptionText} moved from ${Math.round(beforeItem.confidence * 100)}% to ${Math.round(afterItem.confidence * 100)}% confidence.`
+      : "The actual option was not comparable across both rankings.";
     summary.textContent = `After feedback, bcd reran the same scenario and recomputed the ranking with the newly stored memory, updated snapshot, and fresh adaptation signals.`;
     renderEvidenceList("feedback-adaptation-points", points, "No adaptation changes were detected yet.");
     panel.classList.remove("hidden");
@@ -1408,6 +1579,7 @@
     $("predicted-option-text").textContent = prediction.predicted_option_text;
     $("predicted-option-subtitle").textContent = `${$("predict-user-name")?.textContent || "This user"} under ${formatContextSummary(prediction.decision_audit.active_context || {})}`;
     $("prediction-explanation").textContent = prediction.explanation_sections.top_choice_summary;
+    renderDecisionSnapshot(prediction);
     $("strategy-chip").textContent = `strategy: ${prediction.strategy}`;
     $("llm-chip").textContent = `llm used: ${prediction.llm_used ? `yes (${prediction.llm_provider || "configured"})` : "no"}`;
     $("metric-mode").textContent = prediction.strategy;
@@ -1434,6 +1606,7 @@
       .map(([key, value]) => `${key}=${value}`)
       .join(" | ") || "none"}`;
     renderWinnerComparison(prediction);
+    renderShowcaseFeedbackDemo(prediction);
     renderEvidenceList("audit-decisive-factors", prediction.decision_audit.decisive_factors, "No decisive factors were captured.");
     renderEvidenceList("audit-watchouts", prediction.decision_audit.watchouts, "No specific watchouts were captured.");
     renderEvidenceList("audit-adaptation-signals", prediction.decision_audit.adaptation_signals, "No adaptation signals were active.");
@@ -1582,6 +1755,7 @@
       emptyState.classList.add("hidden");
       workspace.classList.remove("hidden");
       banner.classList.remove("hidden");
+      renderScenarioSpotlight();
       renderScenarioGallery();
     } catch (error) {
       emptyState.classList.remove("hidden");
@@ -1745,6 +1919,7 @@
         setActiveUserId(payload.user_id);
         window.location.href = createPredictUrl({
           sampleId: persona.sample_id,
+          scenarioId: scenario.scenario_id,
           userId: payload.user_id,
           prompt: scenario.prompt,
           category: scenario.category,
@@ -1852,6 +2027,7 @@
     renderScenarioGallery();
     $("add-option-button").addEventListener("click", () => {
       if (createOptionRow("")) {
+        clearActiveScenario();
         setStatus("Added another option slot.");
       }
     });
@@ -1897,6 +2073,20 @@
         setStatus(error.message, true);
       }
     });
+    $("apply-showcase-feedback-button").addEventListener("click", async () => {
+      try {
+        const scenario = getActiveScenario();
+        if (!scenario?.feedback_demo || !latestPrediction) {
+          setStatus("Run a bundled showcase prediction before applying the feedback twist.", true);
+          return;
+        }
+        populateFeedbackFormFromDemo(scenario.feedback_demo, latestPrediction);
+        setStatus(`Prepared showcase feedback '${scenario.feedback_demo.title}'. Saving it now...`);
+        $("feedback-button").click();
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    });
     $("suggest-options-button").addEventListener("click", async () => {
       try {
         await suggestOptionsFromCurrentForm();
@@ -1924,6 +2114,8 @@
     ["prompt", "category", "time_of_day", "energy", "weather", "with", "budget", "urgency"].forEach((id) => {
       $(id).addEventListener("input", clearOptionSuggestions);
       $(id).addEventListener("change", clearOptionSuggestions);
+      $(id).addEventListener("input", clearActiveScenario);
+      $(id).addEventListener("change", clearActiveScenario);
     });
 
     $("predict-button").addEventListener("click", async () => {
@@ -1951,6 +2143,8 @@
           }),
         });
         setFeedbackButtonState(true, "Feedback saved");
+        $("apply-showcase-feedback-button").textContent = "Feedback saved";
+        $("apply-showcase-feedback-button").disabled = true;
         renderModelUpdate(feedback);
         setFeedbackSaveNote(
           `Saved actual choice '${feedback.actual_option_text}'. Memory and profile snapshot were updated.`,
@@ -1974,6 +2168,8 @@
       } catch (error) {
         if (error.message === "Feedback has already been recorded for this prediction.") {
           setFeedbackButtonState(true, "Feedback saved");
+          $("apply-showcase-feedback-button").textContent = "Feedback saved";
+          $("apply-showcase-feedback-button").disabled = true;
           setFeedbackSaveNote("Feedback was already recorded for this prediction.");
           setStatus("Feedback was already recorded for this prediction.");
           return;
@@ -2085,7 +2281,7 @@
   async function ensureSampleFromUrlIfNeeded() {
     const sampleId = (urlParams.get("sample_id") || "").trim();
     if (!sampleId) return;
-    await ensureSampleLoaded(sampleId);
+    await ensureSampleLoaded(sampleId, { reset: true });
   }
 
   async function init() {

@@ -14,6 +14,7 @@ DEMO_PERSONAS: list[dict] = [
         "user_id": "sample-alex",
         "display_name": "Alex Chen",
         "headline": "Comfort-first, low-friction decider",
+        "signature_hook": "Best first run if you want an instantly legible winner, runner-up, and adaptation twist.",
         "description": (
             "Alex usually defaults to familiar, warm, practical choices and becomes even more predictable "
             "when tired or under light pressure."
@@ -28,6 +29,7 @@ DEMO_PERSONAS: list[dict] = [
         "user_id": "sample-maya",
         "display_name": "Maya Patel",
         "headline": "Tasteful explorer with a social streak",
+        "signature_hook": "Good for demos where taste, vibe, and social fit should beat generic convenience.",
         "description": (
             "Maya likes options that feel curated, expressive, and a bit memorable, but still notices budget, "
             "effort, and whether the choice fits the vibe of the people involved."
@@ -42,6 +44,7 @@ DEMO_PERSONAS: list[dict] = [
         "user_id": "sample-jordan",
         "display_name": "Jordan Lee",
         "headline": "Structured optimizer who avoids chaos",
+        "signature_hook": "Best for showing that bcd predicts a person's realistic pick, not the flashiest option.",
         "description": (
             "Jordan tends to choose clean, time-boxed, efficient options, especially for study, routines, and "
             "practical purchases."
@@ -64,6 +67,17 @@ DEMO_SCENARIOS: list[dict] = [
         "prompt": "Pick dinner after a cold rainy commute when Alex has almost no energy left.",
         "context": {"time_of_day": "night", "energy": "low", "weather": "rainy", "with": "alone"},
         "options": ["Warm noodle soup", "Double bacon burger", "Late-night salad box"],
+        "demo_takeaway": "Shows comfort, recent state, and dinner memory snapping into a quick personalized winner.",
+        "feedback_demo": {
+            "title": "Add a temporary lighter-food shift",
+            "actual_option_text": "Late-night salad box",
+            "reason_text": "Wanted something lighter after eating heavy food earlier.",
+            "reason_tags": ["light", "reset"],
+            "failure_reasons": ["recent_state_not_captured"],
+            "context_updates": {"energy": "low", "mood": "reset"},
+            "preference_shift_note": "Tonight Alex wanted something lighter than usual.",
+            "expected_effect": "The rerun should visibly promote the lighter option and surface a new short-term shift.",
+        },
     },
     {
         "scenario_id": "alex_friends_night",
@@ -74,6 +88,17 @@ DEMO_SCENARIOS: list[dict] = [
         "prompt": "Choose dinner for Alex when two friends are visiting and everyone wants something easy to share.",
         "context": {"time_of_day": "night", "energy": "medium", "with": "friends", "budget": "medium"},
         "options": ["Shareable hotpot restaurant", "Solo ramen counter", "Expensive tasting menu"],
+        "demo_takeaway": "Shows the same person shifting from solo comfort toward a social, shareable pick.",
+        "feedback_demo": {
+            "title": "Add a low-energy last-minute mood drop",
+            "actual_option_text": "Solo ramen counter",
+            "reason_text": "Alex suddenly wanted something quieter and less effort than a group dinner.",
+            "reason_tags": ["low_energy", "quiet"],
+            "failure_reasons": ["recent_state_not_captured"],
+            "context_updates": {"energy": "low", "with": "alone"},
+            "preference_shift_note": "The social plan collapsed and Alex wanted the easiest solo fallback.",
+            "expected_effect": "The rerun should shrink the social bias and make the solo comfort option more competitive.",
+        },
     },
     {
         "scenario_id": "maya_friday_plan",
@@ -84,6 +109,17 @@ DEMO_SCENARIOS: list[dict] = [
         "prompt": "Pick Maya's Friday night plan after a demanding week when one close friend is free.",
         "context": {"time_of_day": "evening", "energy": "medium", "with": "friends", "budget": "medium"},
         "options": ["Neighborhood wine bar with live jazz", "Stay home with random streaming", "Huge loud sports bar"],
+        "demo_takeaway": "Highlights why taste and vibe fit can beat generic convenience for a specific person.",
+        "feedback_demo": {
+            "title": "Add a sudden need for a quiet reset",
+            "actual_option_text": "Stay home with random streaming",
+            "reason_text": "Maya wanted a low-effort reset instead of going out after the week felt longer than expected.",
+            "reason_tags": ["quiet", "reset", "low_effort"],
+            "failure_reasons": ["recent_state_not_captured"],
+            "context_updates": {"energy": "low", "with": "alone"},
+            "preference_shift_note": "Tonight Maya wants a quiet reset more than a curated social experience.",
+            "expected_effect": "The rerun should show recent state pulling Maya away from the more expressive social option.",
+        },
     },
     {
         "scenario_id": "maya_weekend_purchase",
@@ -94,6 +130,17 @@ DEMO_SCENARIOS: list[dict] = [
         "prompt": "Choose a weekend purchase Maya is actually likely to make for her apartment.",
         "context": {"time_of_day": "morning", "budget": "medium", "urgency": "low"},
         "options": ["Thoughtful ceramic mug set", "Generic discount mug pack", "Pricey designer vase"],
+        "demo_takeaway": "Shows taste-sensitive shopping without collapsing into the cheapest or the flashiest option.",
+        "feedback_demo": {
+            "title": "Add a sudden budget clamp",
+            "actual_option_text": "Generic discount mug pack",
+            "reason_text": "An unexpected expense made Maya want the cheapest workable option today.",
+            "reason_tags": ["budget", "practical"],
+            "failure_reasons": ["context_missing"],
+            "context_updates": {"budget": "tight"},
+            "preference_shift_note": "For this weekend only, Maya is more budget constrained than usual.",
+            "expected_effect": "The rerun should visibly strengthen budget pressure and narrow the gap with the cheaper option.",
+        },
     },
     {
         "scenario_id": "jordan_focus_block",
@@ -104,6 +151,17 @@ DEMO_SCENARIOS: list[dict] = [
         "prompt": "Pick Jordan's study plan for a stressful Saturday morning before a deadline.",
         "context": {"time_of_day": "morning", "energy": "medium", "urgency": "high", "with": "alone"},
         "options": ["Structured 90-minute checklist sprint", "Read six random papers", "Follow an open-ended side quest"],
+        "demo_takeaway": "Makes bcd's identity obvious: predict the realistic choice for this person, not the most ambitious story.",
+        "feedback_demo": {
+            "title": "Add a curiosity spike that breaks routine",
+            "actual_option_text": "Read six random papers",
+            "reason_text": "Jordan got pulled into exploratory reading after finding one unusually relevant paper.",
+            "reason_tags": ["curiosity", "exploration"],
+            "failure_reasons": ["similar_memory_missing"],
+            "context_updates": {"urgency": "medium"},
+            "preference_shift_note": "Today Jordan is more exploratory than the usual deadline mode suggests.",
+            "expected_effect": "The rerun should show exploration pressure entering the model instead of pure structure.",
+        },
     },
     {
         "scenario_id": "jordan_practical_buy",
@@ -114,6 +172,17 @@ DEMO_SCENARIOS: list[dict] = [
         "prompt": "Choose the laptop stand Jordan is most likely to buy after comparing options for too long.",
         "context": {"time_of_day": "night", "budget": "medium", "urgency": "high"},
         "options": ["Reliable adjustable stand with good reviews", "Ultra-cheap unstable stand", "Premium designer stand"],
+        "demo_takeaway": "Good for showing bcd favoring practical, review-backed choices over extremes.",
+        "feedback_demo": {
+            "title": "Add a one-time premium splurge mood",
+            "actual_option_text": "Premium designer stand",
+            "reason_text": "Jordan decided to spend more once rather than keep researching and second-guessing.",
+            "reason_tags": ["premium", "decisive"],
+            "failure_reasons": ["stable_profile_wrong"],
+            "context_updates": {"budget": "flexible"},
+            "preference_shift_note": "For this purchase, Jordan was unusually willing to pay for finish and design.",
+            "expected_effect": "The rerun should make the premium option less dismissible and highlight a temporary shift.",
+        },
     },
 ]
 

@@ -31,6 +31,10 @@ def test_api_happy_path(configured_env):
     showcase_payload = showcase_response.json()
     assert len(showcase_payload["personas"]) >= 3
     assert len(showcase_payload["scenarios"]) >= 6
+    assert showcase_payload["personas"][0]["signature_hook"]
+    assert showcase_payload["scenarios"][0]["demo_takeaway"]
+    assert showcase_payload["scenarios"][0]["feedback_demo"]["actual_option_text"]
+    assert showcase_payload["scenarios"][0]["feedback_demo"]["expected_effect"]
 
     questionnaire_response = client.get("/profiles/onboarding-questionnaire")
     assert questionnaire_response.status_code == 200

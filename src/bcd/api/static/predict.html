@@ -45,6 +45,13 @@
             <strong id="predict-user-name">-</strong>
             <p id="predict-user-summary" class="help">User summary will appear here.</p>
           </div>
+          <div id="scenario-spotlight" class="list-card scenario-spotlight hidden">
+            <span class="section-tag">10-second demo</span>
+            <strong id="scenario-spotlight-title">-</strong>
+            <p id="scenario-spotlight-takeaway" class="help">Choose a showcase scenario to load a clean first-run demo.</p>
+            <div class="chip-row top-gap-sm" id="scenario-spotlight-chips"></div>
+            <p class="mini top-gap-sm" id="scenario-spotlight-feedback">Feedback twist details will appear here for bundled showcase scenarios.</p>
+          </div>
           <div class="button-row inline">
             <a class="button-link secondary" href="/app/setup">Manage user settings</a>
             <button class="secondary" id="copy-scenario-link-button" type="button">Copy scenario link</button>
@@ -266,6 +273,29 @@
               </div>
             </div>
 
+            <div class="decision-snapshot-grid">
+              <article class="snapshot-card snapshot-card-strong">
+                <span class="mini">Predicted choice</span>
+                <strong id="snapshot-predicted-choice">-</strong>
+                <p class="help" id="snapshot-predicted-summary">The strongest personalized fit will appear here.</p>
+              </article>
+              <article class="snapshot-card">
+                <span class="mini">Runner-up</span>
+                <strong id="snapshot-runner-up">-</strong>
+                <p class="help" id="snapshot-runner-up-summary">The closest alternative will appear here.</p>
+              </article>
+              <article class="snapshot-card">
+                <span class="mini">Decisive factor</span>
+                <strong id="snapshot-decisive-factor">-</strong>
+                <p class="help" id="snapshot-decisive-summary">The main reason the winner pulled ahead will appear here.</p>
+              </article>
+              <article class="snapshot-card">
+                <span class="mini">Why the runner-up lost</span>
+                <strong id="snapshot-gap-label">-</strong>
+                <p class="help" id="snapshot-gap-summary">The clearest losing signal will appear here.</p>
+              </article>
+            </div>
+
             <div id="llm-warning" class="status error hidden"></div>
 
             <div class="list-card">
@@ -377,6 +407,14 @@
                   <div class="signal-list top-gap-sm" id="carry-over-list"></div>
                 </section>
               </div>
+              <article class="list-card hidden top-gap-sm" id="showcase-feedback-demo-panel">
+                <span class="section-tag">Showcase feedback twist</span>
+                <h3 id="showcase-feedback-demo-title">Run the adaptation demo</h3>
+                <p class="help" id="showcase-feedback-demo-summary">A bundled feedback action can be applied here to make the learning loop immediately visible.</p>
+                <div class="button-row inline top-gap-sm">
+                  <button class="secondary" id="apply-showcase-feedback-button" type="button">Apply showcase feedback</button>
+                </div>
+              </article>
               <div class="stack top-gap">
                 <div class="field">
                   <label for="actual-option">Actual chosen option</label>
@@ -411,6 +449,23 @@
                   <span class="section-tag">After feedback</span>
                   <h3>What changed immediately</h3>
                   <p class="help" id="feedback-adaptation-summary">A rerun after feedback will appear here.</p>
+                  <div class="comparison-grid top-gap-sm">
+                    <section class="snapshot-card">
+                      <span class="mini">Before feedback</span>
+                      <strong id="feedback-before-winner">-</strong>
+                      <p class="help" id="feedback-before-summary">The original winner will appear here.</p>
+                    </section>
+                    <section class="snapshot-card">
+                      <span class="mini">After feedback</span>
+                      <strong id="feedback-after-winner">-</strong>
+                      <p class="help" id="feedback-after-summary">The rerun winner will appear here.</p>
+                    </section>
+                    <section class="snapshot-card">
+                      <span class="mini">Actual choice movement</span>
+                      <strong id="feedback-actual-movement">-</strong>
+                      <p class="help" id="feedback-actual-summary">The actual option movement will appear here.</p>
+                    </section>
+                  </div>
                   <div class="evidence-list top-gap-sm" id="feedback-adaptation-points"></div>
                 </article>
               </div>
