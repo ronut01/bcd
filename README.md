@@ -4,17 +4,29 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 [![Status: local-first demo](https://img.shields.io/badge/status-local--first%20demo-2563eb.svg)](#)
 
+**Predict what you would actually choose.**
+
 `bcd` is an open-source personalized decision prediction system.
 
-It tries to answer one specific question:
+It models what a particular person is likely to choose based on:
 
-> Given these options, what would this particular person most likely choose right now?
+- stable preferences
+- recent state
+- past decisions
+- retrieved memory
+- feedback-driven adaptation
 
-`bcd` is not trying to predict the objectively correct answer.  
-It is not a generic "predict anything" engine.  
-It is not a world simulation system.
+Instead of searching for the objectively correct answer, `bcd` asks:
 
-It is focused on personal preference modeling, memory-based reasoning, recent-state influence, and feedback-driven adaptation.
+> Given these options, what would *this person* actually choose right now?
+
+`bcd` is **not**:
+- a generic "predict anything" engine
+- a world simulation system
+- a generic agent framework
+- a production SaaS product
+
+It is focused on personal preference modeling, memory-based reasoning, recent-state influence, and a tight feedback loop that changes future predictions.
 
 ## Visual Preview
 
@@ -27,7 +39,7 @@ It is focused on personal preference modeling, memory-based reasoning, recent-st
 
 ## Why this repo is interesting
 
-Most AI demos stop at generic recommendation or one-shot ranking.
+Most AI demos stop at generic recommendation, one-shot ranking, or black-box personalization.
 
 `bcd` is built around a tighter and more personal loop:
 
@@ -66,7 +78,8 @@ In the current codebase, you can:
 
 - create a user from structured onboarding
 - import a ChatGPT export to bootstrap a profile
-- load a bundled sample user with seeded history
+- load one of several bundled sample personas with seeded history
+- jump into one-click showcase scenarios that make the reasoning loop obvious on first run
 - review, accept, reject, or edit extracted profile signals
 - add manual recent-state notes
 - ask a decision question with 2 to 5 candidate options
@@ -87,7 +100,7 @@ Use this page to prepare the user model.
 
 - create a user from onboarding
 - import a ChatGPT export
-- load the sample profile
+- load a showcase persona with seeded history
 - review and edit profile signals
 - inspect stable profile vs recent-state summary
 - add or remove recent-state notes
@@ -97,6 +110,7 @@ Use this page to prepare the user model.
 Use this page to run the decision loop.
 
 - enter a question or situation
+- try a showcase scenario that preloads a persona, prompt, context, and options
 - type your own candidate options
 - ask `bcd` to suggest candidate options based on the active profile
 - add optional context only when it materially matters
@@ -145,7 +159,7 @@ Then open:
 ### 3. Try the fastest demo path
 
 1. Open `/app/setup`
-2. Click the sample profile or create your own user
+2. Click a showcase persona or create your own user
 3. Move to `/app/predict`
 4. Enter a question
 5. Either type options yourself or click `Suggest options`
@@ -178,7 +192,13 @@ python scripts/evaluate_baseline.py
 ### Bootstrap the sample user
 
 ```bash
-curl -X POST http://127.0.0.1:8000/profiles/bootstrap-sample
+curl -X POST "http://127.0.0.1:8000/profiles/bootstrap-sample?sample_id=alex_chen"
+```
+
+### Inspect the bundled showcase personas and scenarios
+
+```bash
+curl http://127.0.0.1:8000/demo/showcase
 ```
 
 ### Ask `bcd` to suggest candidate options
@@ -302,6 +322,7 @@ You can set this either through environment variables or directly inside the bro
 
 ## Core API Endpoints
 
+- `GET /demo/showcase`
 - `POST /profiles/bootstrap-sample`
 - `GET /profiles/onboarding-questionnaire`
 - `POST /profiles/onboard`
@@ -338,6 +359,7 @@ bcd/
 │  ├─ memory/
 │  ├─ profile/
 │  ├─ reflection/
+│  ├─ showcase.py
 │  ├─ storage/
 │  └─ utils/
 └─ tests/
