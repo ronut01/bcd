@@ -1,7 +1,10 @@
 (function () {
   const ACTIVE_USER_KEY = "bcd.activeUserId";
   const LLM_STORAGE_KEY = "bcd.llmSettings";
+  const WORKFLOW_STORAGE_KEY = "bcd.workflowState";
   const DEFAULT_SIGNATURE_SAMPLE_ID = "alex_chen";
+  const DEFAULT_PROMPT = "Pick dinner after a tiring rainy evening.";
+  const DEFAULT_CATEGORY = "food";
   const DEFAULT_OPTIONS = ["Warm noodle soup", "Greasy burger", "Raw salad"];
   const FAILURE_REASON_OPTIONS = [
     { id: "stable_profile_wrong", label: "Stable profile was wrong" },
@@ -28,6 +31,270 @@
     onboardingIndex: 0,
     preview: null,
   };
+  let workflowState = readWorkflowState();
+
+  function defaultWorkflowState() {
+    return {
+      reviewReady: false,
+      predictReady: false,
+      hasPrediction: false,
+      feedbackSaved: false,
+      lastPredictionRequestId: "",
+      lastActualOptionText: "",
+      predictPrefill: null,
+    };
+  }
+
+  function readWorkflowState() {
+    try {
+      const raw = window.localStorage.getItem(WORKFLOW_STORAGE_KEY);
+      if (!raw) return defaultWorkflowState();
+      return { ...defaultWorkflowState(), ...JSON.parse(raw) };
+    } catch (_) {
+      window.localStorage.removeItem(WORKFLOW_STORAGE_KEY);
+      return defaultWorkflowState();
+    }
+  }
+
+  function persistWorkflowState() {
+    window.localStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify(workflowState));
+  }
+
+  function patchWorkflowState(patch) {
+    workflowState = { ...workflowState, ...patch };
+    persistWorkflowState();
+    renderWorkflowUI();
+  }
+
+  function clearWorkflowState() {
+    workflowState = defaultWorkflowState();
+    window.localStorage.removeItem(WORKFLOW_STORAGE_KEY);
+    renderWorkflowUI();
+  }
+
+  function getStoredPredictPrefill() {
+    return workflowState.predictPrefill || null;
+  }
+
+  function savePredictPrefill(prefill) {
+    if (!prefill) return;
+    patchWorkflowState({
+      reviewReady: true,
+      predictReady: true,
+      predictPrefill: prefill,
+    });
+  }
+
+  function buildStarterPrefill(userId = getActiveUserId()) {
+    return {
+      sampleId: "",
+      scenarioId: "",
+      userId,
+      prompt: DEFAULT_PROMPT,
+      category: DEFAULT_CATEGORY,
+      context: {},
+      options: [...DEFAULT_OPTIONS],
+      mode: "baseline",
+    };
+  }
+
+  function buildScenarioPrefill(scenario, sampleId = "", userId = getActiveUserId()) {
+    if (!scenario) {
+      return buildStarterPrefill(userId);
+    }
+    return {
+      sampleId: sampleId || scenario.sample_id || "",
+      scenarioId: scenario.scenario_id || "",
+      userId,
+      prompt: scenario.prompt || DEFAULT_PROMPT,
+      category: scenario.category || DEFAULT_CATEGORY,
+      context: { ...(scenario.context || {}) },
+      options: [...(scenario.options || DEFAULT_OPTIONS)],
+      mode: "baseline",
+    };
+  }
+
+  function getPreferredScenarioForCurrentUser() {
+    const persona = getActivePersona();
+    if (persona?.default_scenario_id) {
+      return getScenarioById(persona.default_scenario_id);
+    }
+    return null;
+  }
+
+  function ensurePredictPrefillForActiveUser() {
+    const userId = getActiveUserId();
+    if (!userId) return null;
+    const stored = getStoredPredictPrefill();
+    if (stored?.userId === userId) {
+      return stored;
+    }
+    const scenario = getPreferredScenarioForCurrentUser();
+    const prefill = scenario
+      ? buildScenarioPrefill(scenario, scenario.sample_id || "", userId)
+      : buildStarterPrefill(userId);
+    savePredictPrefill(prefill);
+    return prefill;
+  }
+
+  function getSetupActiveStage() {
+    return setupState.step >= 3 ? "review" : "source";
+  }
+
+  function isSetupSourceStage() {
+    return page === "setup" && setupState.step <= 2;
+  }
+
+  function isSetupReviewStage() {
+    return page === "setup" && setupState.step >= 3;
+  }
+
+  function scrollSetupStepIntoView(step) {
+    window.requestAnimationFrame(() => {
+      $(`setup-step-${step}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function getCurrentWorkflowStage() {
+    if (page === "setup") {
+      return getSetupActiveStage();
+    }
+    return workflowState.hasPrediction ? "feedback" : "predict";
+  }
+
+  function getWorkflowLink(stage) {
+    return $(`workflow-link-${stage}`);
+  }
+
+  function getWorkflowLinkState(stage) {
+    const hasUser = Boolean(getActiveUserId());
+    if (stage === "source") {
+      if (isSetupSourceStage()) return "active";
+      if (hasUser || workflowState.reviewReady || workflowState.predictReady) return "completed";
+      return page === "predict" ? "available" : "active";
+    }
+    if (stage === "review") {
+      if (!hasUser && !workflowState.reviewReady) return "locked";
+      if (isSetupReviewStage()) return "active";
+      if (workflowState.predictReady || workflowState.hasPrediction || workflowState.feedbackSaved || page === "predict") {
+        return "completed";
+      }
+      return "available";
+    }
+    if (stage === "predict") {
+      if (!workflowState.predictReady) {
+        if (page === "predict" && hasUser) return workflowState.hasPrediction ? "completed" : "active";
+        return "locked";
+      }
+      if (page === "predict" && !workflowState.hasPrediction) return "active";
+      return workflowState.hasPrediction ? "completed" : "available";
+    }
+    if (!workflowState.hasPrediction) return "locked";
+    if (page === "predict" && workflowState.hasPrediction) return "active";
+    return workflowState.feedbackSaved ? "completed" : "available";
+  }
+
+  function getWorkflowRecommendation() {
+    const userId = getActiveUserId();
+    if (!userId) {
+      return {
+        title: "Choose how to create or load a user.",
+        summary: "Start in setup. Prediction unlocks after the user summary is ready.",
+        button: "Choose source",
+        chips: [],
+        action: () => navigateToSetupStep(1),
+      };
+    }
+    if (isSetupSourceStage()) {
+      return {
+        title: "Choose how you want to create or load the user.",
+        summary: "Start a new profile from this source step, or jump back to the current review when you want to continue with the active user.",
+        button: "Resume current review",
+        chips: [userId],
+        action: async () => {
+          await hydrateReviewSummary();
+          setSetupStep(3);
+          scrollSetupStepIntoView(3);
+        },
+      };
+    }
+    if (!workflowState.hasPrediction) {
+      return {
+        title: "Ready for prediction.",
+        summary: "The active user is prepared. Continue into prediction with the stored starting context.",
+        button: "Continue to prediction",
+        chips: [userId],
+        action: () => {
+          if (page === "predict") {
+            syncCurrentPredictFormToWorkflow();
+            $("predict-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            return;
+          }
+          navigateToPredictWorkflow();
+        },
+      };
+    }
+    if (!workflowState.feedbackSaved) {
+      return {
+        title: "Prediction is ready for feedback.",
+        summary: "Inspect the result inline and record the actual choice before leaving the workflow.",
+        button: "Go to feedback",
+        chips: [userId, workflowState.lastPredictionRequestId ? "prediction ready" : ""].filter(Boolean),
+        action: () => {
+          if (page === "predict") {
+            $("feedback-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            return;
+          }
+          navigateToPredictWorkflow({ focus: "feedback-panel" });
+        },
+      };
+    }
+    return {
+      title: "Feedback saved.",
+      summary: "The workflow is updated. You can rerun another prediction or return to profile adjustments.",
+      button: "Run another prediction",
+      chips: [userId, workflowState.lastActualOptionText || ""].filter(Boolean),
+      action: () => {
+        if (page === "predict") {
+          $("predict-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          return;
+        }
+        navigateToPredictWorkflow({ focus: "predict-workspace" });
+      },
+    };
+  }
+
+  function renderWorkflowUI() {
+    ["source", "review", "predict", "feedback"].forEach((stage) => {
+      const link = getWorkflowLink(stage);
+      if (!link) return;
+      link.classList.remove("active", "available", "completed", "locked");
+      const state = getWorkflowLinkState(stage);
+      link.classList.add(state);
+      link.setAttribute("aria-disabled", state === "locked" ? "true" : "false");
+    });
+
+    const title = $("workflow-title");
+    const summary = $("workflow-summary");
+    const chips = $("workflow-context-chips");
+    const button = $("workflow-primary-action");
+    const recommendation = getWorkflowRecommendation();
+    if (title) title.textContent = recommendation.title;
+    if (summary) summary.textContent = recommendation.summary;
+    if (chips) {
+      chips.innerHTML = "";
+      recommendation.chips.forEach((label) => {
+        const chip = document.createElement("span");
+        chip.className = "chip";
+        chip.textContent = label;
+        chips.appendChild(chip);
+      });
+    }
+    if (button) {
+      button.textContent = recommendation.button;
+      button.onclick = recommendation.action;
+    }
+  }
 
   function $(id) {
     return document.getElementById(id);
@@ -48,10 +315,20 @@
   }
 
   function setActiveUserId(userId) {
+    const previousUserId = getActiveUserId();
     if (userId) {
       window.localStorage.setItem(ACTIVE_USER_KEY, userId);
+      if (userId !== previousUserId) {
+        workflowState = {
+          ...defaultWorkflowState(),
+          reviewReady: true,
+          predictReady: true,
+        };
+        persistWorkflowState();
+      }
     } else {
       window.localStorage.removeItem(ACTIVE_USER_KEY);
+      clearWorkflowState();
     }
   }
 
@@ -97,6 +374,18 @@
     if (options.length && $("option-list")) {
       $("option-list").innerHTML = "";
       options.slice(0, 5).forEach((optionText) => createOptionRow(optionText));
+    }
+    if (getActiveUserId()) {
+      savePredictPrefill({
+        sampleId: (urlParams.get("sample_id") || "").trim(),
+        scenarioId: activeScenarioId,
+        userId: getActiveUserId(),
+        prompt: $("prompt")?.value || DEFAULT_PROMPT,
+        category: $("category")?.value || DEFAULT_CATEGORY,
+        context: getContextPayload(),
+        options: getCurrentOptionTexts().length ? getCurrentOptionTexts() : [...DEFAULT_OPTIONS],
+        mode: $("prediction-mode")?.value || "baseline",
+      });
     }
     renderScenarioSpotlight();
   }
@@ -171,9 +460,7 @@
     const modal = $("global-error-modal");
     if (!modal) return;
     modal.classList.add("hidden");
-    if ($("prediction-modal")?.classList.contains("hidden")) {
-      document.body.classList.remove("modal-open");
-    }
+    document.body.classList.remove("modal-open");
   }
 
   function getLlmConfig() {
@@ -337,6 +624,78 @@
     if (autorun) base.searchParams.set("autorun", "1");
     if (focus) base.searchParams.set("focus", focus);
     return base.toString();
+  }
+
+  function navigateToSetupStep(step = 1) {
+    const target = new URL("/app/setup", window.location.origin);
+    target.searchParams.set("setup_step", String(step));
+    window.location.href = target.toString();
+  }
+
+  function buildPredictWorkflowUrl({ focus = "", autorun = false } = {}) {
+    const prefill = ensurePredictPrefillForActiveUser() || buildStarterPrefill(getActiveUserId());
+    return createPredictUrl({
+      sampleId: prefill.sampleId || "",
+      scenarioId: prefill.scenarioId || "",
+      userId: prefill.userId || getActiveUserId(),
+      prompt: prefill.prompt || DEFAULT_PROMPT,
+      category: prefill.category || DEFAULT_CATEGORY,
+      context: prefill.context || {},
+      options: prefill.options || DEFAULT_OPTIONS,
+      mode: prefill.mode || "baseline",
+      autorun,
+      focus,
+    });
+  }
+
+  function navigateToPredictWorkflow({ focus = "", autorun = false } = {}) {
+    window.location.href = buildPredictWorkflowUrl({ focus, autorun });
+  }
+
+  async function applySetupUrlOverrides() {
+    if (page !== "setup") return;
+    const requestedStep = Number((urlParams.get("setup_step") || "").trim());
+    if (!requestedStep || requestedStep === 1) {
+      setSetupStep(getActiveUserId() ? Math.max(setupState.step, 1) : 1);
+      return;
+    }
+    if (!getActiveUserId()) {
+      setSetupStep(1);
+      return;
+    }
+    if (requestedStep === 4) {
+      await hydrateOptionalAdjustments();
+      setSetupStep(4);
+      return;
+    }
+    await hydrateReviewSummary();
+    setSetupStep(3);
+  }
+
+  function applyStoredPredictPrefill() {
+    if (page !== "predict") return;
+    if (urlParams.get("prompt") || getUrlOptionOverrides().length) {
+      return;
+    }
+    const prefill = ensurePredictPrefillForActiveUser();
+    if (!prefill) return;
+    activeScenarioId = prefill.scenarioId || activeScenarioId || "";
+    if ($("category")) $("category").value = prefill.category || DEFAULT_CATEGORY;
+    if ($("prompt")) $("prompt").value = prefill.prompt || DEFAULT_PROMPT;
+    Object.entries(prefill.context || {}).forEach(([key, value]) => {
+      if ($(key) && value) {
+        $(key).value = value;
+      }
+    });
+    if ($("option-list")) {
+      $("option-list").innerHTML = "";
+      (prefill.options || DEFAULT_OPTIONS).slice(0, 5).forEach((optionText) => createOptionRow(optionText));
+    }
+    if ($("prediction-mode")) {
+      $("prediction-mode").value = prefill.mode || "baseline";
+    }
+    $("metric-mode").textContent = prefill.mode || "baseline";
+    renderScenarioSpotlight();
   }
 
   function clearActiveScenario() {
@@ -774,6 +1133,7 @@
       emptyState.classList.remove("hidden");
       workspace.classList.add("hidden");
       renderExistingUserBanner();
+      renderWorkflowUI();
       return;
     }
     emptyState.classList.add("hidden");
@@ -809,6 +1169,11 @@
       card.reflection_carry_over_brief || card.recent_summary?.adaptation_signals || [],
       "No feedback carry-over is active yet.",
     );
+    ensurePredictPrefillForActiveUser();
+    patchWorkflowState({
+      reviewReady: true,
+      predictReady: true,
+    });
     renderExistingUserBanner(profile);
   }
 
@@ -820,6 +1185,7 @@
     if (!userId) {
       emptyState.classList.remove("hidden");
       workspace.classList.add("hidden");
+      renderWorkflowUI();
       return;
     }
 
@@ -839,6 +1205,7 @@
     renderHistorySummary(history);
     renderSignals(signals);
     renderRecentStateNotes(recentState);
+    renderWorkflowUI();
   }
 
   function renderExistingUserBanner(profile = null) {
@@ -926,6 +1293,7 @@
           setStatus(`Loading demo persona '${persona.display_name}'...`);
           const payload = await bootstrapSampleProfile(persona.sample_id);
           setActiveUserId(payload.user_id);
+          savePredictPrefill(buildScenarioPrefill(scenario, persona.sample_id, payload.user_id));
           await hydrateReviewSummary();
           setSetupStep(3);
           setStatus(`Loaded '${persona.display_name}'. Review the summary or jump into prediction.`);
@@ -937,18 +1305,8 @@
         try {
           const payload = await bootstrapSampleProfile(persona.sample_id);
           setActiveUserId(payload.user_id);
-          const nextUrl = createPredictUrl({
-            sampleId: persona.sample_id,
-            scenarioId: scenario?.scenario_id || "",
-            userId: payload.user_id,
-            prompt: scenario?.prompt || "",
-            category: scenario?.category || "food",
-            context: scenario?.context || {},
-            options: scenario?.options || [],
-            mode: "baseline",
-            autorun: true,
-          });
-          window.location.href = nextUrl;
+          savePredictPrefill(buildScenarioPrefill(scenario, persona.sample_id, payload.user_id));
+          navigateToPredictWorkflow({ autorun: true });
         } catch (error) {
           setStatus(error.message, true);
         }
@@ -985,17 +1343,29 @@
         <strong>${escapeHtml(scenario.title)}</strong>
         <p class="help top-gap-sm">${escapeHtml(scenario.subtitle || "")}</p>
         <div class="mini top-gap-sm">${escapeHtml(scenario.demo_takeaway || "")}</div>
-        <div class="mini top-gap-sm">${escapeHtml(scenario.prompt)}</div>
         <div class="chip-row top-gap-sm">
           <span class="chip">${escapeHtml(scenario.category)}</span>
-          <span class="chip">${escapeHtml(formatContextSummary(scenario.context))}</span>
+          <span class="chip">${escapeHtml(persona?.headline || "showcase persona")}</span>
         </div>
-        ${
-          scenario.feedback_demo
-            ? `<div class="mini top-gap-sm">Feedback twist: ${escapeHtml(scenario.feedback_demo.expected_effect)}</div>`
-            : ""
-        }
-        <div class="mini top-gap-sm">Options: ${escapeHtml((scenario.options || []).join(" | "))}</div>
+        <div class="scenario-meta-stack top-gap-sm">
+          <div class="scenario-readout">
+            <span class="scenario-readout-label">Prompt</span>
+            <p class="mini scenario-readout-copy">${escapeHtml(scenario.prompt)}</p>
+          </div>
+          <div class="scenario-readout">
+            <span class="scenario-readout-label">Context</span>
+            <p class="mini scenario-readout-copy">${escapeHtml(formatContextSummary(scenario.context))}</p>
+          </div>
+          <div class="scenario-readout">
+            <span class="scenario-readout-label">Options</span>
+            <p class="mini scenario-readout-copy">${escapeHtml((scenario.options || []).join(" | "))}</p>
+          </div>
+          ${
+            scenario.feedback_demo
+              ? `<div class="scenario-readout"><span class="scenario-readout-label">Feedback twist</span><p class="mini scenario-readout-copy">${escapeHtml(scenario.feedback_demo.expected_effect)}</p></div>`
+              : ""
+          }
+        </div>
         <div class="button-row inline top-gap-sm">
           <button class="secondary" type="button" data-fill-scenario="${escapeAttribute(scenario.scenario_id)}">Load clean demo</button>
           <button class="primary" type="button" data-run-scenario="${escapeAttribute(scenario.scenario_id)}">Run clean demo</button>
@@ -1108,12 +1478,14 @@
     row.querySelector("input").addEventListener("input", () => {
       syncOptionSuggestionButtons();
       clearActiveScenario();
+      syncCurrentPredictFormToWorkflow();
     });
     row.querySelector("button").addEventListener("click", () => {
       if (optionList.children.length > 2) {
         row.remove();
         syncOptionSuggestionButtons();
         clearActiveScenario();
+        syncCurrentPredictFormToWorkflow();
       } else {
         setStatus("At least two options are required.", true);
       }
@@ -1286,7 +1658,12 @@
     $("prediction-content").classList.add("hidden");
     $("metric-confidence").textContent = "-";
     renderShowcaseFeedbackDemo();
-    closePredictionModal();
+    patchWorkflowState({
+      hasPrediction: false,
+      feedbackSaved: false,
+      lastPredictionRequestId: "",
+      lastActualOptionText: "",
+    });
   }
 
   function resetPredictionForm() {
@@ -1297,8 +1674,8 @@
       const visibleName = $("predict-user-name")?.textContent || "";
       $("user-display-name").value = visibleName === "-" ? "" : visibleName;
     }
-    $("category").value = "food";
-    $("prompt").value = "Pick dinner after a tiring rainy evening.";
+    $("category").value = DEFAULT_CATEGORY;
+    $("prompt").value = DEFAULT_PROMPT;
     $("time_of_day").value = "";
     $("energy").value = "";
     $("weather").value = "";
@@ -1324,6 +1701,8 @@
     }
     const payload = await bootstrapSampleProfile(sampleId);
     setActiveUserId(payload.user_id);
+    const scenario = getScenarioById(persona.default_scenario_id);
+    savePredictPrefill(buildScenarioPrefill(scenario, persona.sample_id, payload.user_id));
     if (page === "setup") {
       await hydrateReviewSummary();
       setSetupStep(3);
@@ -1337,6 +1716,7 @@
   function applyScenarioToForm(scenario) {
     if (!scenario) return;
     activeScenarioId = scenario.scenario_id || "";
+    savePredictPrefill(buildScenarioPrefill(scenario, scenario.sample_id || "", getActiveUserId()));
     $("category").value = scenario.category || "custom";
     $("prompt").value = scenario.prompt || "";
     $("time_of_day").value = scenario.context?.time_of_day || "";
@@ -1398,6 +1778,20 @@
       payload.llm_config = llmConfig;
     }
     return payload;
+  }
+
+  function syncCurrentPredictFormToWorkflow() {
+    if (page !== "predict" || !getActiveUserId() || !$("prompt")) return;
+    savePredictPrefill({
+      sampleId: getActivePersona()?.sample_id || "",
+      scenarioId: activeScenarioId || "",
+      userId: getActiveUserId(),
+      prompt: $("prompt").value.trim() || DEFAULT_PROMPT,
+      category: $("category").value.trim() || DEFAULT_CATEGORY,
+      context: getContextPayload(),
+      options: getCurrentOptionTexts().length ? getCurrentOptionTexts() : [...DEFAULT_OPTIONS],
+      mode: $("prediction-mode").value || "baseline",
+    });
   }
 
   function getCurrentScenarioLink({ autorun = true, focus = "" } = {}) {
@@ -1575,7 +1969,12 @@
     $("prediction-empty").classList.add("hidden");
     $("prediction-content").classList.remove("hidden");
     $("feedback-panel").classList.remove("hidden");
-    openPredictionModal();
+    patchWorkflowState({
+      hasPrediction: true,
+      feedbackSaved: false,
+      lastPredictionRequestId: prediction.request_id,
+      lastActualOptionText: "",
+    });
     $("predicted-option-text").textContent = prediction.predicted_option_text;
     $("predicted-option-subtitle").textContent = `${$("predict-user-name")?.textContent || "This user"} under ${formatContextSummary(prediction.decision_audit.active_context || {})}`;
     $("prediction-explanation").textContent = prediction.explanation_sections.top_choice_summary;
@@ -1697,22 +2096,16 @@
       }
       actualOptionSelect.appendChild(option);
     });
+    $("prediction-stage")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    renderWorkflowUI();
   }
 
   function openPredictionModal() {
-    const modal = $("prediction-modal");
-    if (!modal) return;
-    modal.classList.remove("hidden");
-    document.body.classList.add("modal-open");
+    $("prediction-stage")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function closePredictionModal() {
-    const modal = $("prediction-modal");
-    if (!modal) return;
-    modal.classList.add("hidden");
-    if ($("global-error-modal")?.classList.contains("hidden")) {
-      document.body.classList.remove("modal-open");
-    }
+    $("predict-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function renderEvidenceList(containerId, items, emptyMessage) {
@@ -1743,6 +2136,13 @@
       if ($("user-display-name")) $("user-display-name").value = "";
       $("user-id").value = "";
       banner.classList.add("hidden");
+      patchWorkflowState({
+        reviewReady: false,
+        predictReady: false,
+        hasPrediction: false,
+        feedbackSaved: false,
+        predictPrefill: null,
+      });
       return;
     }
     try {
@@ -1755,8 +2155,14 @@
       emptyState.classList.add("hidden");
       workspace.classList.remove("hidden");
       banner.classList.remove("hidden");
+      patchWorkflowState({
+        reviewReady: true,
+        predictReady: true,
+      });
+      ensurePredictPrefillForActiveUser();
       renderScenarioSpotlight();
       renderScenarioGallery();
+      renderWorkflowUI();
     } catch (error) {
       emptyState.classList.remove("hidden");
       workspace.classList.add("hidden");
@@ -1776,6 +2182,67 @@
       const itemStep = Number(item.dataset.step);
       item.classList.toggle("active", itemStep === step);
       item.classList.toggle("complete", itemStep < step);
+    });
+    patchWorkflowState({
+      reviewReady: Boolean(getActiveUserId()) && step >= 3,
+      predictReady: Boolean(getActiveUserId()) && step >= 3,
+    });
+  }
+
+  function wireWorkflowLinks() {
+    const sourceLink = getWorkflowLink("source");
+    const reviewLink = getWorkflowLink("review");
+    const predictLink = getWorkflowLink("predict");
+    const feedbackLink = getWorkflowLink("feedback");
+
+    sourceLink?.addEventListener("click", (event) => {
+      if (page === "setup") {
+        event.preventDefault();
+        setSetupStep(1);
+        scrollSetupStepIntoView(1);
+        renderWorkflowUI();
+      }
+    });
+
+    reviewLink?.addEventListener("click", (event) => {
+      if (getWorkflowLinkState("review") === "locked") {
+        event.preventDefault();
+        return;
+      }
+      if (page === "setup") {
+        event.preventDefault();
+        hydrateReviewSummary().then(() => {
+          setSetupStep(3);
+          scrollSetupStepIntoView(3);
+        });
+      }
+    });
+
+    predictLink?.addEventListener("click", (event) => {
+      if (getWorkflowLinkState("predict") === "locked") {
+        event.preventDefault();
+        return;
+      }
+      event.preventDefault();
+      if (page === "predict") {
+        syncCurrentPredictFormToWorkflow();
+        $("predict-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      navigateToPredictWorkflow();
+    });
+
+    feedbackLink?.addEventListener("click", (event) => {
+      if (getWorkflowLinkState("feedback") === "locked") {
+        event.preventDefault();
+        return;
+      }
+      event.preventDefault();
+      if (page === "predict") {
+        $("feedback-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      navigateToPredictWorkflow({ focus: "feedback-panel" });
     });
   }
 
@@ -1867,6 +2334,7 @@
         body: JSON.stringify(payload),
       });
       setActiveUserId(created.user_id);
+      savePredictPrefill(buildStarterPrefill(created.user_id));
       await hydrateReviewSummary();
       setSetupStep(3);
       setStatus(`Created profile '${created.user_id}'. Review the summary or continue to prediction.`);
@@ -1876,11 +2344,35 @@
   }
 
   function wireSetupPage() {
+    $("continue-to-predict-button")?.addEventListener("click", () => {
+      if (!workflowState.predictReady) {
+        setStatus("Finish creating or loading a user first.", true);
+        return;
+      }
+      navigateToPredictWorkflow();
+    });
+    $("review-to-predict-button")?.addEventListener("click", () => {
+      if (!workflowState.predictReady) {
+        setStatus("Review the active user first, then continue to prediction.", true);
+        return;
+      }
+      navigateToPredictWorkflow();
+    });
+    $("adjustments-to-predict-button")?.addEventListener("click", () => {
+      if (!workflowState.predictReady) {
+        setStatus("Finish the user setup flow first.", true);
+        return;
+      }
+      navigateToPredictWorkflow();
+    });
     $("choose-source-sample").addEventListener("click", async () => {
       try {
         setStatus("Loading sample profile...");
         const payload = await bootstrapSampleProfile(DEFAULT_SIGNATURE_SAMPLE_ID);
         setActiveUserId(payload.user_id);
+        const persona = getPersonaBySampleId(DEFAULT_SIGNATURE_SAMPLE_ID);
+        const scenario = getScenarioById(persona?.default_scenario_id);
+        savePredictPrefill(buildScenarioPrefill(scenario, persona?.sample_id || DEFAULT_SIGNATURE_SAMPLE_ID, payload.user_id));
         await hydrateReviewSummary();
         setSetupStep(3);
         setStatus(`Sample profile '${payload.user_id}' is ready. Review the summary or continue to prediction.`);
@@ -1917,17 +2409,8 @@
         }
         const payload = await bootstrapSampleProfile(persona.sample_id);
         setActiveUserId(payload.user_id);
-        window.location.href = createPredictUrl({
-          sampleId: persona.sample_id,
-          scenarioId: scenario.scenario_id,
-          userId: payload.user_id,
-          prompt: scenario.prompt,
-          category: scenario.category,
-          context: scenario.context,
-          options: scenario.options,
-          mode: "baseline",
-          autorun: true,
-        });
+        savePredictPrefill(buildScenarioPrefill(scenario, persona.sample_id, payload.user_id));
+        navigateToPredictWorkflow({ autorun: true });
       } catch (error) {
         setStatus(error.message, true);
       }
@@ -1965,6 +2448,7 @@
           body: formData,
         });
         setActiveUserId(payload.user_profile.user_id);
+        savePredictPrefill(buildStarterPrefill(payload.user_profile.user_id));
         await hydrateReviewSummary();
         setSetupStep(3);
         setStatus(`Imported profile '${payload.user_profile.user_id}' from ${payload.import_stats.conversation_count} conversations.`);
@@ -1988,7 +2472,10 @@
       setupState.onboardingAnswers = {};
       setupState.onboardingIndex = 0;
       setupState.preview = null;
+      activeScenarioId = "";
+      setActiveUserId("");
       setSetupStep(1);
+      scrollSetupStepIntoView(1);
       setStatus("Choose a new source to create or load a user.");
     });
 
@@ -2025,6 +2512,23 @@
     wireLlmButtons();
     resetPredictionForm();
     renderScenarioGallery();
+    $("load-demo-entry-button")?.addEventListener("click", async () => {
+      try {
+        const persona = getPersonaBySampleId(DEFAULT_SIGNATURE_SAMPLE_ID) || showcase.personas[0];
+        const scenario = getScenarioById(persona?.default_scenario_id);
+        if (!persona || !scenario) {
+          throw new Error("The demo persona is not available right now.");
+        }
+        const payload = await bootstrapSampleProfile(persona.sample_id);
+        setActiveUserId(payload.user_id);
+        savePredictPrefill(buildScenarioPrefill(scenario, persona.sample_id, payload.user_id));
+        await hydratePredictWorkspace();
+        applyStoredPredictPrefill();
+        setStatus(`Loaded demo persona '${persona.display_name}'.`);
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    });
     $("add-option-button").addEventListener("click", () => {
       if (createOptionRow("")) {
         clearActiveScenario();
@@ -2049,9 +2553,6 @@
         setStatus(error.message, true);
       }
     });
-    $("close-prediction-button").addEventListener("click", closePredictionModal);
-    $("edit-prediction-button").addEventListener("click", closePredictionModal);
-    $("prediction-modal-backdrop").addEventListener("click", closePredictionModal);
     $("copy-result-link-button").addEventListener("click", async () => {
       try {
         await copyTextToClipboard(
@@ -2116,7 +2617,10 @@
       $(id).addEventListener("change", clearOptionSuggestions);
       $(id).addEventListener("input", clearActiveScenario);
       $(id).addEventListener("change", clearActiveScenario);
+      $(id).addEventListener("input", syncCurrentPredictFormToWorkflow);
+      $(id).addEventListener("change", syncCurrentPredictFormToWorkflow);
     });
+    $("prediction-mode").addEventListener("change", syncCurrentPredictFormToWorkflow);
 
     $("predict-button").addEventListener("click", async () => {
       await runPredictionFromForm();
@@ -2150,6 +2654,10 @@
           `Saved actual choice '${feedback.actual_option_text}'. Memory and profile snapshot were updated.`,
         );
         setStatus("Feedback saved. Future predictions can now adapt to this choice.");
+        patchWorkflowState({
+          feedbackSaved: true,
+          lastActualOptionText: feedback.actual_option_text,
+        });
         if (latestPredictionPayload) {
           try {
             const rerunPrediction = await request("/decisions/predict", {
@@ -2172,6 +2680,7 @@
           $("apply-showcase-feedback-button").disabled = true;
           setFeedbackSaveNote("Feedback was already recorded for this prediction.");
           setStatus("Feedback was already recorded for this prediction.");
+          patchWorkflowState({ feedbackSaved: true });
           return;
         }
         setFeedbackButtonState(false, "Save feedback");
@@ -2194,6 +2703,7 @@
       }
       prepareForNextPrediction();
       latestPredictionPayload = JSON.parse(JSON.stringify(payload));
+      syncCurrentPredictFormToWorkflow();
       setStatus("Running prediction...");
       const prediction = await request("/decisions/predict", {
         method: "POST",
@@ -2293,21 +2803,24 @@
       }
       applyUrlStateOverrides();
       ensureErrorModal();
+      wireWorkflowLinks();
       if (page === "setup") {
         await loadOnboardingQuestionnaire();
         wireSetupPage();
         if (getActiveUserId()) {
           await hydrateReviewSummary();
-          setSetupStep(3);
         }
+        await applySetupUrlOverrides();
       }
       if (page === "predict") {
         wirePredictPage();
         await ensureSampleFromUrlIfNeeded();
         await hydratePredictWorkspace();
         applyPredictUrlOverrides();
+        applyStoredPredictPrefill();
         await runPredictAutomationFromUrl();
       }
+      renderWorkflowUI();
     } catch (error) {
       setStatus(error.message, true);
     }

@@ -7,470 +7,524 @@
     <link rel="stylesheet" href="/app/assets/styles.css" />
   </head>
   <body data-page="predict">
-    <div class="shell">
-      <nav class="nav">
-        <a class="brand" href="/app/predict">bcd</a>
-        <div class="nav-links">
-          <a class="nav-link" href="/app/setup">User setup</a>
-          <a class="nav-link active" href="/app/predict">Prediction workspace</a>
+    <div class="app-shell">
+      <aside class="app-sidebar">
+        <div class="sidebar-brand-block">
+          <a class="brand sidebar-brand" href="/app/predict">BCD Predict</a>
+          <p class="sidebar-caption">Intelligence Engine</p>
         </div>
-      </nav>
 
-      <section class="hero">
-        <article class="panel hero-copy">
-          <span class="eyebrow">Prediction workspace</span>
-          <h1>Ask the decision here. Keep user modeling somewhere else.</h1>
-          <p>
-            This page is focused on one job: entering a decision prompt, scoring options, inspecting the result,
-            and recording feedback. Profile editing and recent-state management live on the separate setup page.
-          </p>
-        </article>
-        <aside class="panel hero-side">
-          <div class="metric-strip">
-            <div class="metric">
-              <span class="mini">Current user</span>
-              <strong id="metric-user">None</strong>
-            </div>
-            <div class="metric">
-              <span class="mini">Prediction mode</span>
-              <strong id="metric-mode">baseline</strong>
-            </div>
-            <div class="metric">
-              <span class="mini">Confidence</span>
-              <strong id="metric-confidence">-</strong>
-            </div>
-          </div>
-          <div id="predict-user-banner" class="list-card hidden">
-            <span class="mini">Active profile</span>
-            <strong id="predict-user-name">-</strong>
-            <p id="predict-user-summary" class="help">User summary will appear here.</p>
-          </div>
-          <div id="scenario-spotlight" class="list-card scenario-spotlight hidden">
-            <span class="section-tag">10-second demo</span>
-            <strong id="scenario-spotlight-title">-</strong>
-            <p id="scenario-spotlight-takeaway" class="help">Choose a showcase scenario to load a clean first-run demo.</p>
-            <div class="chip-row top-gap-sm" id="scenario-spotlight-chips"></div>
-            <p class="mini top-gap-sm" id="scenario-spotlight-feedback">Feedback twist details will appear here for bundled showcase scenarios.</p>
-          </div>
-          <div class="button-row inline">
-            <a class="button-link secondary" href="/app/setup">Manage user settings</a>
-            <button class="secondary" id="copy-scenario-link-button" type="button">Copy scenario link</button>
-          </div>
-        </aside>
-      </section>
+        <nav class="sidebar-nav workflow-nav">
+          <a id="workflow-link-source" class="sidebar-link" href="/app/setup?setup_step=1" data-workflow-stage="source">
+            <span class="sidebar-icon">01</span>
+            <span>Source</span>
+          </a>
+          <a id="workflow-link-review" class="sidebar-link" href="/app/setup?setup_step=3" data-workflow-stage="review">
+            <span class="sidebar-icon">02</span>
+            <span>Review</span>
+          </a>
+          <a id="workflow-link-predict" class="sidebar-link active" href="/app/predict" data-workflow-stage="predict">
+            <span class="sidebar-icon">03</span>
+            <span>Predict</span>
+          </a>
+          <a id="workflow-link-feedback" class="sidebar-link" href="/app/predict?focus=feedback-panel" data-workflow-stage="feedback">
+            <span class="sidebar-icon">04</span>
+            <span>Feedback</span>
+          </a>
+        </nav>
 
-      <div id="predict-status" class="status top-gap">Load or create a user from the setup page, then run a prediction here.</div>
-
-      <section id="predict-empty-state" class="panel empty-state top-gap">
-        <strong>No active user selected.</strong>
-        <p>Open the setup page first, create or load a user, then come back here to run predictions.</p>
-        <div class="button-row inline top-gap-sm">
-          <a class="button-link primary" href="/app/setup">Go to user setup</a>
+        <div class="sidebar-footer">
+          <div class="sidebar-meta-card workflow-card">
+            <span class="mini">Workflow</span>
+            <strong id="workflow-title">Prepare a user before running a decision.</strong>
+            <p class="help" id="workflow-summary">No active user is connected yet.</p>
+            <div class="chip-row top-gap-sm" id="workflow-context-chips"></div>
+            <div class="button-row top-gap-sm">
+              <button class="primary" id="workflow-primary-action" type="button">Start with setup</button>
+            </div>
+          </div>
         </div>
-      </section>
+      </aside>
 
-      <section id="predict-workspace" class="hidden top-gap">
-        <article class="panel top-gap-sm">
-          <div class="section-header">
-            <div>
-              <span class="section-tag">Showcase scenarios</span>
-              <h2 class="top-gap-sm">One-click demos that explain the product fast</h2>
-              <p class="help">Each scenario is designed to make the predicted choice, the explanation, and the feedback loop feel obvious on first run.</p>
-            </div>
+      <div class="app-main">
+        <header class="topbar">
+          <div class="topbar-copy">
+            <span class="topbar-label">BCD Analyst</span>
+            <strong>Decision Dashboard</strong>
           </div>
-          <div class="source-card-grid top-gap-sm" id="scenario-gallery">
-            <div class="source-card">
-              <strong>Loading showcase scenarios...</strong>
-              <p class="help">Scenario cards will appear here.</p>
-            </div>
-          </div>
-        </article>
+          <label class="topbar-search">
+            <span class="topbar-search-icon">Search</span>
+            <input type="search" placeholder="Search predictions..." />
+          </label>
+        </header>
 
-        <div class="predict-layout">
-          <article class="panel predict-input-shell">
-            <span class="section-tag">Step 1</span>
-            <h2>Ask a decision</h2>
-            <p class="help">Enter the question first. The prediction result opens separately so you can focus on either the input or the outcome, not both at once.</p>
-            <div class="stack top-gap">
-              <div class="grid-2">
-                <div class="field">
-                  <label for="user-display-name">Active user</label>
-                  <input id="user-display-name" readonly />
-                  <input id="user-id" type="hidden" />
+        <div class="shell">
+          <section class="page-intro">
+            <article class="page-intro-card">
+              <span class="eyebrow">Continuous prediction workflow</span>
+              <h1>Decision Dashboard</h1>
+              <p>
+                Move from user setup into prediction without resetting the context. The active user, recommended
+                scenario, and next step stay attached to the workflow.
+              </p>
+            </article>
+            <aside class="page-summary-card">
+              <div class="metric-strip">
+                <div class="metric">
+                  <span class="mini">Current user</span>
+                  <strong id="metric-user">None</strong>
                 </div>
-                <div class="field">
-                  <label for="category">Category</label>
-                  <select id="category">
-                    <option value="food">food</option>
-                    <option value="entertainment">entertainment</option>
-                    <option value="study">study</option>
-                    <option value="shopping">shopping</option>
-                    <option value="custom">custom</option>
-                  </select>
+                <div class="metric">
+                  <span class="mini">Prediction mode</span>
+                  <strong id="metric-mode">baseline</strong>
+                </div>
+                <div class="metric">
+                  <span class="mini">Confidence</span>
+                  <strong id="metric-confidence">-</strong>
                 </div>
               </div>
-
-              <div class="field">
-                <label for="prompt">Question or situation</label>
-                <textarea id="prompt">Pick dinner after a tiring rainy evening.</textarea>
+              <div id="predict-user-banner" class="list-card hidden">
+                <span class="mini">Active profile</span>
+                <strong id="predict-user-name">-</strong>
+                <p id="predict-user-summary" class="help">User summary will appear here.</p>
               </div>
+              <div id="scenario-spotlight" class="list-card scenario-spotlight hidden">
+                <span class="section-tag">Recommended starting point</span>
+                <strong id="scenario-spotlight-title">-</strong>
+                <p id="scenario-spotlight-takeaway" class="help">
+                  The current scenario recommendation will appear here.
+                </p>
+                <div class="chip-row top-gap-sm" id="scenario-spotlight-chips"></div>
+                <p class="mini top-gap-sm" id="scenario-spotlight-feedback">
+                  Feedback twist details will appear here for bundled showcase scenarios.
+                </p>
+              </div>
+              <div class="button-row inline">
+                <a class="button-link secondary" href="/app/setup?setup_step=3">Back to user review</a>
+                <button class="secondary" id="copy-scenario-link-button" type="button">Copy scenario link</button>
+              </div>
+            </aside>
+          </section>
 
-              <div class="field">
-                <div class="section-header">
-                  <label>Candidate options</label>
-                  <button class="secondary" id="suggest-options-button" type="button">Suggest options</button>
+          <div id="predict-status" class="status top-gap">Load or create a user from the setup page, then run a prediction here.</div>
+
+          <section id="predict-empty-state" class="panel empty-state top-gap">
+            <strong>No active user selected.</strong>
+            <p>Start with setup or load a demo persona here, then this prediction workspace will prefill itself.</p>
+            <div class="button-row inline top-gap-sm">
+              <a class="button-link primary" href="/app/setup?setup_step=1">Start with setup</a>
+              <button class="secondary" id="load-demo-entry-button" type="button">Load demo persona</button>
+            </div>
+          </section>
+
+          <section id="predict-workspace" class="hidden top-gap">
+            <article class="panel top-gap-sm">
+              <div class="section-header">
+                <div>
+                  <span class="section-tag">Step 2</span>
+                  <h2 class="top-gap-sm">Pick a starting scenario or continue from setup</h2>
+                  <p class="help">
+                    When a user arrives from setup, this section should already feel ready to run. Showcase scenarios
+                    are still available as clean starting points.
+                  </p>
                 </div>
-                <p class="help">Type your own options, or ask bcd to suggest options this user is realistically likely to consider.</p>
-                <div class="option-list" id="option-list"></div>
-                <div class="button-row inline">
-                  <button class="secondary" id="add-option-button" type="button">Add option</button>
-                  <button class="secondary" id="reset-button" type="button">Reset example</button>
+              </div>
+              <div class="source-card-grid top-gap-sm" id="scenario-gallery">
+                <div class="source-card">
+                  <strong>Loading showcase scenarios...</strong>
+                  <p class="help">Scenario cards will appear here.</p>
                 </div>
-                <div class="suggestion-panel hidden" id="option-suggestion-panel">
-                  <div class="section-header">
-                    <div>
-                      <strong>Suggested options</strong>
-                      <p class="mini" id="option-suggestion-summary">Generated from the active profile, recent state, and relevant memories.</p>
+              </div>
+            </article>
+
+            <div class="predict-layout">
+              <article class="panel predict-input-shell">
+                <span class="section-tag">Step 3</span>
+                <h2>Ask a decision</h2>
+                <p class="help">
+                  The active user and starter context stay attached to the workflow, so you can refine the prompt and
+                  run immediately instead of starting from a blank state.
+                </p>
+                <div class="stack top-gap">
+                  <div class="grid-2">
+                    <div class="field">
+                      <label for="user-display-name">Active user</label>
+                      <input id="user-display-name" readonly />
+                      <input id="user-id" type="hidden" />
+                    </div>
+                    <div class="field">
+                      <label for="category">Category</label>
+                      <select id="category">
+                        <option value="food">food</option>
+                        <option value="entertainment">entertainment</option>
+                        <option value="study">study</option>
+                        <option value="shopping">shopping</option>
+                        <option value="custom">custom</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <label for="prompt">Question or situation</label>
+                    <textarea id="prompt">Pick dinner after a tiring rainy evening.</textarea>
+                  </div>
+
+                  <div class="field">
+                    <div class="section-header">
+                      <label>Candidate options</label>
+                      <button class="secondary" id="suggest-options-button" type="button">Suggest options</button>
+                    </div>
+                    <p class="help">Type your own options, or ask bcd to suggest options this user is realistically likely to consider.</p>
+                    <div class="option-list" id="option-list"></div>
+                    <div class="button-row inline">
+                      <button class="secondary" id="add-option-button" type="button">Add option</button>
+                      <button class="secondary" id="reset-button" type="button">Reset example</button>
+                    </div>
+                    <div class="suggestion-panel hidden" id="option-suggestion-panel">
+                      <div class="section-header">
+                        <div>
+                          <strong>Suggested options</strong>
+                          <p class="mini" id="option-suggestion-summary">Generated from the active profile, recent state, and relevant memories.</p>
+                        </div>
+                        <div class="button-row inline">
+                          <button class="secondary" id="add-suggestions-button" type="button">Add top suggestions</button>
+                          <button class="secondary" id="clear-suggestions-button" type="button">Clear</button>
+                        </div>
+                      </div>
+                      <div class="suggestion-list top-gap-sm" id="option-suggestion-list"></div>
+                    </div>
+                  </div>
+
+                  <div class="button-row inline">
+                    <button class="primary" id="predict-button" type="button">Run prediction</button>
+                    <button class="secondary" id="copy-result-summary-button" type="button">Copy result summary</button>
+                  </div>
+                </div>
+              </article>
+
+              <aside class="predict-side-stack">
+                <details class="panel soft-block" open>
+                  <summary class="summary-trigger">Optional context</summary>
+                  <div class="stack top-gap-sm">
+                    <p class="help">Only fill fields that would materially change what this person is likely to choose.</p>
+                    <div class="grid-2">
+                      <div class="field">
+                        <label for="time_of_day">Time of day</label>
+                        <select id="time_of_day">
+                          <option value="" selected>(optional)</option>
+                          <option value="morning">morning</option>
+                          <option value="evening">evening</option>
+                          <option value="night">night</option>
+                        </select>
+                      </div>
+                      <div class="field">
+                        <label for="energy">Current energy</label>
+                        <select id="energy">
+                          <option value="" selected>(optional)</option>
+                          <option value="low">low</option>
+                          <option value="medium">medium</option>
+                          <option value="high">high</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="field">
+                      <label for="weather">Weather conditions</label>
+                      <select id="weather">
+                        <option value="" selected>(optional)</option>
+                        <option value="rainy">rainy</option>
+                        <option value="cold">cold</option>
+                        <option value="hot">hot</option>
+                        <option value="sunny">sunny</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="with">Social setting</label>
+                      <select id="with">
+                        <option value="" selected>(optional)</option>
+                        <option value="alone">alone</option>
+                        <option value="partner">with partner</option>
+                        <option value="friends">with friends</option>
+                        <option value="family">with family</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="budget">Budget sensitivity</label>
+                      <select id="budget">
+                        <option value="" selected>(optional)</option>
+                        <option value="tight">tight</option>
+                        <option value="medium">medium</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="urgency">Time pressure</label>
+                      <select id="urgency">
+                        <option value="" selected>(optional)</option>
+                        <option value="low">low</option>
+                        <option value="medium">medium</option>
+                        <option value="high">high</option>
+                      </select>
+                    </div>
+                  </div>
+                </details>
+
+                <details class="panel soft-block">
+                  <summary class="summary-trigger">Advanced model settings</summary>
+                  <div class="stack top-gap-sm">
+                    <div class="field">
+                      <label for="prediction-mode">Prediction mode</label>
+                      <select id="prediction-mode">
+                        <option value="baseline" selected>baseline</option>
+                        <option value="hybrid">hybrid</option>
+                        <option value="llm">llm</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="llm-api-key">LLM API key</label>
+                      <input id="llm-api-key" type="password" placeholder="sk-..." />
+                    </div>
+                    <div class="field">
+                      <label for="llm-base-url">Base URL</label>
+                      <input id="llm-base-url" value="https://api.openai.com/v1" />
+                    </div>
+                    <div class="field">
+                      <label for="llm-model">Model</label>
+                      <input id="llm-model" value="gpt-4.1-mini" />
                     </div>
                     <div class="button-row inline">
-                      <button class="secondary" id="add-suggestions-button" type="button">Add top suggestions</button>
-                      <button class="secondary" id="clear-suggestions-button" type="button">Clear</button>
+                      <button class="secondary" id="save-llm-settings-button" type="button">Save</button>
+                      <button class="secondary" id="clear-llm-settings-button" type="button">Clear</button>
                     </div>
                   </div>
-                  <div class="suggestion-list top-gap-sm" id="option-suggestion-list"></div>
-                </div>
-              </div>
-
-              <div class="button-row inline">
-                <button class="primary" id="predict-button" type="button">Run prediction</button>
-                <button class="secondary" id="copy-result-summary-button" type="button">Copy result summary</button>
-              </div>
+                </details>
+              </aside>
             </div>
-          </article>
 
-          <aside class="predict-side-stack">
-            <details class="panel soft-block" open>
-              <summary class="summary-trigger">Optional context</summary>
-              <div class="stack top-gap-sm">
-                <p class="help">Only fill fields that would materially change what this person is likely to choose.</p>
-                <div class="grid-2">
-                  <div class="field">
-                    <label for="time_of_day">Time of day</label>
-                    <select id="time_of_day">
-                      <option value="" selected>(optional)</option>
-                      <option value="morning">morning</option>
-                      <option value="evening">evening</option>
-                      <option value="night">night</option>
-                    </select>
-                  </div>
-                  <div class="field">
-                    <label for="energy">Current energy</label>
-                    <select id="energy">
-                      <option value="" selected>(optional)</option>
-                      <option value="low">low</option>
-                      <option value="medium">medium</option>
-                      <option value="high">high</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div class="field">
-                  <label for="weather">Weather conditions</label>
-                  <select id="weather">
-                    <option value="" selected>(optional)</option>
-                    <option value="rainy">rainy</option>
-                    <option value="cold">cold</option>
-                    <option value="hot">hot</option>
-                    <option value="sunny">sunny</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label for="with">Social setting</label>
-                  <select id="with">
-                    <option value="" selected>(optional)</option>
-                    <option value="alone">alone</option>
-                    <option value="partner">with partner</option>
-                    <option value="friends">with friends</option>
-                    <option value="family">with family</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label for="budget">Budget sensitivity</label>
-                  <select id="budget">
-                    <option value="" selected>(optional)</option>
-                    <option value="tight">tight</option>
-                    <option value="medium">medium</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label for="urgency">Time pressure</label>
-                  <select id="urgency">
-                    <option value="" selected>(optional)</option>
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                  </select>
-                </div>
-              </div>
-            </details>
-
-            <details class="panel soft-block">
-              <summary class="summary-trigger">Advanced model settings</summary>
-              <div class="stack top-gap-sm">
-                <div class="field">
-                  <label for="prediction-mode">Prediction mode</label>
-                  <select id="prediction-mode">
-                    <option value="baseline" selected>baseline</option>
-                    <option value="hybrid">hybrid</option>
-                    <option value="llm">llm</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label for="llm-api-key">LLM API key</label>
-                  <input id="llm-api-key" type="password" placeholder="sk-..." />
-                </div>
-                <div class="field">
-                  <label for="llm-base-url">Base URL</label>
-                  <input id="llm-base-url" value="https://api.openai.com/v1" />
-                </div>
-                <div class="field">
-                  <label for="llm-model">Model</label>
-                  <input id="llm-model" value="gpt-4.1-mini" />
+            <section id="prediction-stage" class="panel top-gap">
+              <div class="section-header">
+                <div>
+                  <span class="section-tag">Step 4</span>
+                  <h2 class="top-gap-sm">Outcome and feedback</h2>
+                  <p class="help">Prediction results stay inline so you can inspect them and record feedback in one pass.</p>
                 </div>
                 <div class="button-row inline">
-                  <button class="secondary" id="save-llm-settings-button" type="button">Save</button>
-                  <button class="secondary" id="clear-llm-settings-button" type="button">Clear</button>
-                </div>
-              </div>
-            </details>
-          </aside>
-        </div>
-      </section>
-
-      <div id="prediction-modal" class="modal-overlay hidden">
-        <div class="modal-backdrop" id="prediction-modal-backdrop"></div>
-        <div class="modal-sheet">
-          <div class="modal-header">
-            <div>
-              <span class="section-tag">Prediction result</span>
-              <h2>Inspect the prediction</h2>
-            </div>
-            <div class="button-row inline">
-              <button class="secondary" id="edit-prediction-button" type="button">Edit inputs</button>
-              <button class="secondary" id="close-prediction-button" type="button">Close</button>
-            </div>
-          </div>
-
-          <div id="prediction-empty" class="note">No prediction yet. Run the input form first to see a result.</div>
-          <div id="prediction-content" class="stack hidden top-gap">
-            <div class="prediction-hero">
-              <span class="mini">Predicted choice</span>
-              <strong id="predicted-option-text">-</strong>
-              <p class="mini top-gap-sm" id="predicted-option-subtitle">The strongest personalized fit will appear here.</p>
-              <div class="chip-row top-gap-sm">
-                <span class="chip" id="strategy-chip">strategy: -</span>
-                <span class="chip" id="llm-chip">llm used: no</span>
-              </div>
-            </div>
-
-            <div class="decision-snapshot-grid">
-              <article class="snapshot-card snapshot-card-strong">
-                <span class="mini">Predicted choice</span>
-                <strong id="snapshot-predicted-choice">-</strong>
-                <p class="help" id="snapshot-predicted-summary">The strongest personalized fit will appear here.</p>
-              </article>
-              <article class="snapshot-card">
-                <span class="mini">Runner-up</span>
-                <strong id="snapshot-runner-up">-</strong>
-                <p class="help" id="snapshot-runner-up-summary">The closest alternative will appear here.</p>
-              </article>
-              <article class="snapshot-card">
-                <span class="mini">Decisive factor</span>
-                <strong id="snapshot-decisive-factor">-</strong>
-                <p class="help" id="snapshot-decisive-summary">The main reason the winner pulled ahead will appear here.</p>
-              </article>
-              <article class="snapshot-card">
-                <span class="mini">Why the runner-up lost</span>
-                <strong id="snapshot-gap-label">-</strong>
-                <p class="help" id="snapshot-gap-summary">The clearest losing signal will appear here.</p>
-              </article>
-            </div>
-
-            <div id="llm-warning" class="status error hidden"></div>
-
-            <div class="list-card">
-              <h3>Prediction summary</h3>
-              <p class="help" id="prediction-explanation"></p>
-              <div class="chip-row top-gap-sm">
-                <span class="chip" id="audit-confidence-chip">confidence: -</span>
-                <span class="chip" id="audit-margin-chip">margin: -</span>
-                <span class="chip" id="audit-context-chip">context: -</span>
-              </div>
-            </div>
-
-            <div class="split-cards">
-              <section class="list-card">
-                <span class="mini">Why it won</span>
-                <strong id="winner-vs-runner-up-title">Winner vs runner-up</strong>
-                <p class="help" id="winner-vs-runner-up-summary">The closest comparison will appear here.</p>
-                <div class="evidence-list top-gap-sm" id="winner-vs-runner-up-points"></div>
-              </section>
-              <section class="list-card">
-                <span class="mini">Shareable result</span>
-                <strong id="share-card-title">Copy the scenario or the outcome</strong>
-                <p class="help" id="share-card-summary">Use a clean link for the scenario, or copy a compact result summary for sharing.</p>
-                <div class="button-row inline top-gap-sm">
                   <button class="secondary" id="copy-result-link-button" type="button">Copy result link</button>
                   <button class="secondary" id="copy-result-text-button" type="button">Copy result text</button>
                 </div>
-              </section>
-            </div>
-
-            <div class="split-cards">
-              <section class="list-card">
-                <h3>Agent workflow</h3>
-                <div class="signal-list top-gap-sm" id="agent-workflow-list"></div>
-              </section>
-              <section class="list-card">
-                <h3>Top choice influence</h3>
-                <div class="signal-list top-gap-sm" id="top-choice-influence-list"></div>
-              </section>
-            </div>
-
-            <div class="list-card">
-              <h3>Agent agreement</h3>
-              <p class="help" id="agent-agreement-summary">No agreement summary yet.</p>
-              <div class="chip-row top-gap-sm" id="agent-agreement-chips"></div>
-              <div class="signal-list top-gap-sm" id="agent-agreement-list"></div>
-            </div>
-
-            <div class="list-card">
-              <h3>Ranked options</h3>
-              <div class="rank-list top-gap-sm" id="rank-list"></div>
-            </div>
-
-            <details class="list-card compact-details">
-              <summary class="summary-trigger">Decision reasoning</summary>
-              <div class="split-cards top-gap-sm">
-                <section>
-                  <h3>Decisive factors</h3>
-                  <div class="evidence-list top-gap-sm" id="audit-decisive-factors"></div>
-                </section>
-                <section>
-                  <h3>Watchouts</h3>
-                  <div class="evidence-list top-gap-sm" id="audit-watchouts"></div>
-                </section>
               </div>
-              <section class="top-gap-sm">
-                <h3>Adaptation signals</h3>
-                <div class="evidence-list top-gap-sm" id="audit-adaptation-signals"></div>
-              </section>
-              <div class="split-cards top-gap-sm">
-                <section>
-                  <h3>Why this option</h3>
-                  <div class="evidence-list top-gap-sm" id="top-choice-evidence"></div>
-                </section>
-                <section>
-                  <h3>Recent state that mattered</h3>
-                  <div class="evidence-list top-gap-sm" id="recent-state-evidence"></div>
-                </section>
-              </div>
-              <div class="split-cards top-gap-sm">
-                <section>
-                  <h3>Memories that mattered</h3>
-                  <div class="evidence-list top-gap-sm" id="memory-explanation-list"></div>
-                </section>
-                <section>
-                  <h3>Why other options lost</h3>
-                  <div class="evidence-list top-gap-sm" id="why-others-lost-list"></div>
-                </section>
-              </div>
-            </details>
 
-            <details class="list-card compact-details">
-              <summary class="summary-trigger">Retrieved memories</summary>
-              <div class="memory-list top-gap-sm" id="memory-list"></div>
-            </details>
+              <div id="prediction-empty" class="note top-gap">No prediction yet. Run the input form first to see a result.</div>
+              <div id="prediction-content" class="stack hidden top-gap">
+                <div class="prediction-hero">
+                  <span class="mini">Predicted choice</span>
+                  <strong id="predicted-option-text">-</strong>
+                  <p class="mini top-gap-sm" id="predicted-option-subtitle">The strongest personalized fit will appear here.</p>
+                  <div class="chip-row top-gap-sm">
+                    <span class="chip" id="strategy-chip">strategy: -</span>
+                    <span class="chip" id="llm-chip">llm used: no</span>
+                  </div>
+                </div>
 
-            <article class="list-card hidden" id="feedback-panel">
-              <span class="section-tag">Feedback</span>
-              <h3>Give feedback</h3>
-              <p class="help">Record what the user actually chose so memory, recent state, and drift markers can update.</p>
-              <div class="inline-note hidden top-gap-sm" id="model-update-summary"></div>
-              <div class="split-cards hidden top-gap-sm" id="model-update-panel">
-                <section class="list-card">
-                  <h3>Snapshot delta</h3>
-                  <div class="signal-list top-gap-sm" id="snapshot-delta-list"></div>
-                </section>
-                <section class="list-card">
-                  <h3>Carry-over into next prediction</h3>
-                  <div class="signal-list top-gap-sm" id="carry-over-list"></div>
-                </section>
-              </div>
-              <article class="list-card hidden top-gap-sm" id="showcase-feedback-demo-panel">
-                <span class="section-tag">Showcase feedback twist</span>
-                <h3 id="showcase-feedback-demo-title">Run the adaptation demo</h3>
-                <p class="help" id="showcase-feedback-demo-summary">A bundled feedback action can be applied here to make the learning loop immediately visible.</p>
-                <div class="button-row inline top-gap-sm">
-                  <button class="secondary" id="apply-showcase-feedback-button" type="button">Apply showcase feedback</button>
+                <div class="decision-snapshot-grid">
+                  <article class="snapshot-card snapshot-card-strong">
+                    <span class="mini">Predicted choice</span>
+                    <strong id="snapshot-predicted-choice">-</strong>
+                    <p class="help" id="snapshot-predicted-summary">The strongest personalized fit will appear here.</p>
+                  </article>
+                  <article class="snapshot-card">
+                    <span class="mini">Runner-up</span>
+                    <strong id="snapshot-runner-up">-</strong>
+                    <p class="help" id="snapshot-runner-up-summary">The closest alternative will appear here.</p>
+                  </article>
+                  <article class="snapshot-card">
+                    <span class="mini">Decisive factor</span>
+                    <strong id="snapshot-decisive-factor">-</strong>
+                    <p class="help" id="snapshot-decisive-summary">The main reason the winner pulled ahead will appear here.</p>
+                  </article>
+                  <article class="snapshot-card">
+                    <span class="mini">Why the runner-up lost</span>
+                    <strong id="snapshot-gap-label">-</strong>
+                    <p class="help" id="snapshot-gap-summary">The clearest losing signal will appear here.</p>
+                  </article>
                 </div>
-              </article>
-              <div class="stack top-gap">
-                <div class="field">
-                  <label for="actual-option">Actual chosen option</label>
-                  <select id="actual-option"></select>
+
+                <div id="llm-warning" class="status error hidden"></div>
+
+                <div class="list-card">
+                  <h3>Prediction summary</h3>
+                  <p class="help" id="prediction-explanation"></p>
+                  <div class="chip-row top-gap-sm">
+                    <span class="chip" id="audit-confidence-chip">confidence: -</span>
+                    <span class="chip" id="audit-margin-chip">margin: -</span>
+                    <span class="chip" id="audit-context-chip">context: -</span>
+                  </div>
                 </div>
-                <div class="field">
-                  <label for="reason-text">Why was that choice made?</label>
-                  <textarea id="reason-text" placeholder="Optional free-text reason"></textarea>
+
+                <div class="split-cards">
+                  <section class="list-card">
+                    <span class="mini">Why it won</span>
+                    <strong id="winner-vs-runner-up-title">Winner vs runner-up</strong>
+                    <p class="help" id="winner-vs-runner-up-summary">The closest comparison will appear here.</p>
+                    <div class="evidence-list top-gap-sm" id="winner-vs-runner-up-points"></div>
+                  </section>
+                  <section class="list-card">
+                    <span class="mini">Shareable result</span>
+                    <strong id="share-card-title">Copy the scenario or the outcome</strong>
+                    <p class="help" id="share-card-summary">Use a clean link for the scenario, or copy a compact result summary for sharing.</p>
+                  </section>
                 </div>
-                <div class="field">
-                  <label for="reason-tags">Reason tags</label>
-                  <input id="reason-tags" placeholder="warm, easy, social" />
+
+                <div class="split-cards">
+                  <section class="list-card">
+                    <h3>Agent workflow</h3>
+                    <div class="signal-list top-gap-sm" id="agent-workflow-list"></div>
+                  </section>
+                  <section class="list-card">
+                    <h3>Top choice influence</h3>
+                    <div class="signal-list top-gap-sm" id="top-choice-influence-list"></div>
+                  </section>
                 </div>
-                <div class="field">
-                  <label>Why might the prediction have been wrong?</label>
-                  <div class="checkbox-list" id="failure-reason-list"></div>
+
+                <div class="list-card">
+                  <h3>Agent agreement</h3>
+                  <p class="help" id="agent-agreement-summary">No agreement summary yet.</p>
+                  <div class="chip-row top-gap-sm" id="agent-agreement-chips"></div>
+                  <div class="signal-list top-gap-sm" id="agent-agreement-list"></div>
                 </div>
-                <div class="field">
-                  <label for="preference-shift-note">Preference shift note</label>
-                  <textarea id="preference-shift-note" placeholder="Optional: describe any temporary or lasting shift in preference"></textarea>
+
+                <div class="list-card">
+                  <h3>Ranked options</h3>
+                  <div class="rank-list top-gap-sm" id="rank-list"></div>
                 </div>
-                <div class="field">
-                  <label for="context-updates">Context updates (JSON)</label>
-                  <textarea id="context-updates" placeholder='Optional JSON, for example {"energy":"lower_than_expected"}'></textarea>
-                </div>
-                <div class="button-row inline">
-                  <button class="primary" id="feedback-button" type="button">Save feedback</button>
-                  <a class="button-link secondary" href="/app/setup">Adjust profile or recent state</a>
-                </div>
-                <div class="inline-note hidden" id="feedback-save-note"></div>
-                <article class="list-card hidden" id="feedback-adaptation-panel">
-                  <span class="section-tag">After feedback</span>
-                  <h3>What changed immediately</h3>
-                  <p class="help" id="feedback-adaptation-summary">A rerun after feedback will appear here.</p>
-                  <div class="comparison-grid top-gap-sm">
-                    <section class="snapshot-card">
-                      <span class="mini">Before feedback</span>
-                      <strong id="feedback-before-winner">-</strong>
-                      <p class="help" id="feedback-before-summary">The original winner will appear here.</p>
+
+                <details class="list-card compact-details">
+                  <summary class="summary-trigger">Decision reasoning</summary>
+                  <div class="split-cards top-gap-sm">
+                    <section>
+                      <h3>Decisive factors</h3>
+                      <div class="evidence-list top-gap-sm" id="audit-decisive-factors"></div>
                     </section>
-                    <section class="snapshot-card">
-                      <span class="mini">After feedback</span>
-                      <strong id="feedback-after-winner">-</strong>
-                      <p class="help" id="feedback-after-summary">The rerun winner will appear here.</p>
-                    </section>
-                    <section class="snapshot-card">
-                      <span class="mini">Actual choice movement</span>
-                      <strong id="feedback-actual-movement">-</strong>
-                      <p class="help" id="feedback-actual-summary">The actual option movement will appear here.</p>
+                    <section>
+                      <h3>Watchouts</h3>
+                      <div class="evidence-list top-gap-sm" id="audit-watchouts"></div>
                     </section>
                   </div>
-                  <div class="evidence-list top-gap-sm" id="feedback-adaptation-points"></div>
+                  <section class="top-gap-sm">
+                    <h3>Adaptation signals</h3>
+                    <div class="evidence-list top-gap-sm" id="audit-adaptation-signals"></div>
+                  </section>
+                  <div class="split-cards top-gap-sm">
+                    <section>
+                      <h3>Why this option</h3>
+                      <div class="evidence-list top-gap-sm" id="top-choice-evidence"></div>
+                    </section>
+                    <section>
+                      <h3>Recent state that mattered</h3>
+                      <div class="evidence-list top-gap-sm" id="recent-state-evidence"></div>
+                    </section>
+                  </div>
+                  <div class="split-cards top-gap-sm">
+                    <section>
+                      <h3>Memories that mattered</h3>
+                      <div class="evidence-list top-gap-sm" id="memory-explanation-list"></div>
+                    </section>
+                    <section>
+                      <h3>Why other options lost</h3>
+                      <div class="evidence-list top-gap-sm" id="why-others-lost-list"></div>
+                    </section>
+                  </div>
+                </details>
+
+                <details class="list-card compact-details">
+                  <summary class="summary-trigger">Retrieved memories</summary>
+                  <div class="memory-list top-gap-sm" id="memory-list"></div>
+                </details>
+
+                <article class="list-card hidden" id="feedback-panel">
+                  <span class="section-tag">Feedback</span>
+                  <h3>Record the actual choice</h3>
+                  <p class="help">Save the real outcome here so the next prediction can adapt without leaving this flow.</p>
+                  <div class="inline-note hidden top-gap-sm" id="model-update-summary"></div>
+                  <div class="split-cards hidden top-gap-sm" id="model-update-panel">
+                    <section class="list-card">
+                      <h3>Snapshot delta</h3>
+                      <div class="signal-list top-gap-sm" id="snapshot-delta-list"></div>
+                    </section>
+                    <section class="list-card">
+                      <h3>Carry-over into next prediction</h3>
+                      <div class="signal-list top-gap-sm" id="carry-over-list"></div>
+                    </section>
+                  </div>
+                  <article class="list-card hidden top-gap-sm" id="showcase-feedback-demo-panel">
+                    <span class="section-tag">Showcase feedback twist</span>
+                    <h3 id="showcase-feedback-demo-title">Run the adaptation demo</h3>
+                    <p class="help" id="showcase-feedback-demo-summary">A bundled feedback action can be applied here to make the learning loop immediately visible.</p>
+                    <div class="button-row inline top-gap-sm">
+                      <button class="secondary" id="apply-showcase-feedback-button" type="button">Apply showcase feedback</button>
+                    </div>
+                  </article>
+                  <div class="stack top-gap">
+                    <div class="field">
+                      <label for="actual-option">Actual chosen option</label>
+                      <select id="actual-option"></select>
+                    </div>
+                    <div class="field">
+                      <label for="reason-text">Why was that choice made?</label>
+                      <textarea id="reason-text" placeholder="Optional free-text reason"></textarea>
+                    </div>
+                    <div class="field">
+                      <label for="reason-tags">Reason tags</label>
+                      <input id="reason-tags" placeholder="warm, easy, social" />
+                    </div>
+                    <div class="field">
+                      <label>Why might the prediction have been wrong?</label>
+                      <div class="checkbox-list" id="failure-reason-list"></div>
+                    </div>
+                    <div class="field">
+                      <label for="preference-shift-note">Preference shift note</label>
+                      <textarea id="preference-shift-note" placeholder="Optional: describe any temporary or lasting shift in preference"></textarea>
+                    </div>
+                    <div class="field">
+                      <label for="context-updates">Context updates (JSON)</label>
+                      <textarea id="context-updates" placeholder='Optional JSON, for example {"energy":"lower_than_expected"}'></textarea>
+                    </div>
+                    <div class="button-row inline">
+                      <button class="primary" id="feedback-button" type="button">Save feedback</button>
+                      <a class="button-link secondary" href="/app/setup?setup_step=4">Adjust profile or recent state</a>
+                    </div>
+                    <div class="inline-note hidden" id="feedback-save-note"></div>
+                    <article class="list-card hidden" id="feedback-adaptation-panel">
+                      <span class="section-tag">After feedback</span>
+                      <h3>What changed immediately</h3>
+                      <p class="help" id="feedback-adaptation-summary">A rerun after feedback will appear here.</p>
+                      <div class="comparison-grid top-gap-sm">
+                        <section class="snapshot-card">
+                          <span class="mini">Before feedback</span>
+                          <strong id="feedback-before-winner">-</strong>
+                          <p class="help" id="feedback-before-summary">The original winner will appear here.</p>
+                        </section>
+                        <section class="snapshot-card">
+                          <span class="mini">After feedback</span>
+                          <strong id="feedback-after-winner">-</strong>
+                          <p class="help" id="feedback-after-summary">The rerun winner will appear here.</p>
+                        </section>
+                        <section class="snapshot-card">
+                          <span class="mini">Actual choice movement</span>
+                          <strong id="feedback-actual-movement">-</strong>
+                          <p class="help" id="feedback-actual-summary">The actual option movement will appear here.</p>
+                        </section>
+                      </div>
+                      <div class="evidence-list top-gap-sm" id="feedback-adaptation-points"></div>
+                    </article>
+                  </div>
                 </article>
               </div>
-            </article>
-          </div>
+            </section>
+          </section>
+
+          <footer class="app-footer">
+            System ID: BCD-CORE-V4.2 | Environment: Local Demo | Surface: Decision Dashboard
+          </footer>
         </div>
       </div>
     </div>

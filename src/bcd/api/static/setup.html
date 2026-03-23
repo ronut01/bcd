@@ -7,308 +7,368 @@
     <link rel="stylesheet" href="/app/assets/styles.css" />
   </head>
   <body data-page="setup">
-    <div class="shell">
-      <nav class="nav">
-        <a class="brand" href="/app/setup">bcd</a>
-        <div class="nav-links">
-          <a class="nav-link active" href="/app/setup">User setup</a>
-          <a class="nav-link" href="/app/predict">Prediction workspace</a>
+    <div class="app-shell">
+      <aside class="app-sidebar">
+        <div class="sidebar-brand-block">
+          <a class="brand sidebar-brand" href="/app/setup">BCD Studio</a>
+          <p class="sidebar-caption">Profile Intake</p>
         </div>
-      </nav>
 
-      <section class="hero">
-        <article class="panel hero-copy">
-          <span class="eyebrow">Personalized choice prediction</span>
-          <h1>Set up a user fast, then get to prediction.</h1>
-          <p>Create or import, review the profile once, and move on.</p>
-        </article>
-        <aside class="panel hero-side">
-          <div class="metric-strip">
-            <div class="metric">
-              <span class="mini">Active user</span>
-              <strong id="setup-metric-user">None</strong>
-            </div>
-            <div class="metric">
-              <span class="mini">Signals</span>
-              <strong id="setup-metric-signals">0</strong>
-            </div>
-            <div class="metric">
-              <span class="mini">Recent notes</span>
-              <strong id="setup-metric-notes">0</strong>
-            </div>
-          </div>
-          <p>Pick a persona fast, or build your own. The bundled demo personas are designed to make the first prediction feel immediately legible.</p>
-          <div class="button-row inline">
-            <a class="button-link primary" href="/app/predict">Open prediction workspace</a>
-            <button class="secondary" id="launch-signature-demo-button" type="button">Launch signature demo</button>
-          </div>
-        </aside>
-      </section>
+        <nav class="sidebar-nav workflow-nav">
+          <a id="workflow-link-source" class="sidebar-link active" href="/app/setup?setup_step=1" data-workflow-stage="source">
+            <span class="sidebar-icon">01</span>
+            <span>Source</span>
+          </a>
+          <a id="workflow-link-review" class="sidebar-link" href="/app/setup?setup_step=3" data-workflow-stage="review">
+            <span class="sidebar-icon">02</span>
+            <span>Review</span>
+          </a>
+          <a id="workflow-link-predict" class="sidebar-link" href="/app/predict" data-workflow-stage="predict">
+            <span class="sidebar-icon">03</span>
+            <span>Predict</span>
+          </a>
+          <a id="workflow-link-feedback" class="sidebar-link" href="/app/predict?focus=feedback-panel" data-workflow-stage="feedback">
+            <span class="sidebar-icon">04</span>
+            <span>Feedback</span>
+          </a>
+        </nav>
 
-      <div id="setup-status" class="status top-gap">Choose how you want to create or load the user.</div>
-
-      <section class="panel top-gap">
-        <div class="wizard-stepper" id="setup-stepper">
-          <div class="wizard-step" data-step="1">
-            <span class="wizard-step-number">1</span>
-            <div>
-              <strong>Source</strong>
-              <div class="mini">Start point</div>
-            </div>
-          </div>
-          <div class="wizard-step" data-step="2">
-            <span class="wizard-step-number">2</span>
-            <div>
-              <strong>Create</strong>
-              <div class="mini">Answer or import</div>
-            </div>
-          </div>
-          <div class="wizard-step" data-step="3">
-            <span class="wizard-step-number">3</span>
-            <div>
-              <strong>Review</strong>
-              <div class="mini">Quick check</div>
-            </div>
-          </div>
-          <div class="wizard-step" data-step="4">
-            <span class="wizard-step-number">4</span>
-            <div>
-              <strong>Adjust</strong>
-              <div class="mini">Optional only</div>
+        <div class="sidebar-footer">
+          <div class="sidebar-meta-card workflow-card">
+            <span class="mini">Workflow</span>
+            <strong id="workflow-title">Choose how to create or load a user.</strong>
+            <p class="help" id="workflow-summary">The next stage will unlock as soon as the user summary is ready.</p>
+            <div class="chip-row top-gap-sm" id="workflow-context-chips"></div>
+            <div class="button-row top-gap-sm">
+              <button class="primary" id="workflow-primary-action" type="button">Choose source</button>
             </div>
           </div>
         </div>
-      </section>
+      </aside>
 
-      <section class="wizard-shell top-gap">
-        <article class="panel wizard-panel" id="setup-step-1">
-          <span class="section-tag">Step 1</span>
-          <h2>Choose source</h2>
-          <p class="help">Choose the fastest way to get a usable profile.</p>
-          <div class="source-card-grid top-gap">
-            <button class="source-card" id="choose-source-sample" type="button">
-              <span class="section-tag">Fastest</span>
-              <strong>Load sample profile</strong>
-              <p class="help">Open the built-in user and skip straight to review.</p>
-            </button>
-            <button class="source-card" id="choose-source-structured" type="button">
-              <span class="section-tag">Guided</span>
-              <strong>Structured onboarding</strong>
-              <p class="help">Answer a few questions and build a fresh profile.</p>
-            </button>
-            <button class="source-card" id="choose-source-import" type="button">
-              <span class="section-tag">Imported</span>
-              <strong>Import ChatGPT export</strong>
-              <p class="help">Upload a `.zip` or `conversations.json` for a starter profile.</p>
-            </button>
+      <div class="app-main">
+        <header class="topbar">
+          <div class="topbar-copy">
+            <span class="topbar-label">BCD Studio</span>
+            <strong>User Context Workspace</strong>
           </div>
-          <div class="top-gap">
-            <div class="section-header">
-              <div>
-                <span class="section-tag">Showcase</span>
-                <h3 class="top-gap-sm">Try a polished demo persona in one click</h3>
-              </div>
-            </div>
-            <div class="source-card-grid top-gap-sm" id="setup-persona-gallery">
-              <div class="source-card">
-                <strong>Loading personas...</strong>
-                <p class="help">Bundled demo personas will appear here.</p>
-              </div>
-            </div>
-          </div>
-          <div id="setup-existing-user-banner" class="list-card top-gap-sm hidden">
-            <span class="mini">Existing active user</span>
-            <strong id="existing-user-title">-</strong>
-            <p class="help">You already have an active user on this browser. You can review it again or choose a new source.</p>
-            <div class="button-row inline top-gap-sm">
-              <button class="secondary" id="resume-existing-user-button" type="button">Review current user</button>
-            </div>
-          </div>
-        </article>
+          <label class="topbar-search">
+            <span class="topbar-search-icon">Search</span>
+            <input type="search" placeholder="Search profiles..." />
+          </label>
+        </header>
 
-        <article class="panel wizard-panel hidden" id="setup-step-2">
-          <span class="section-tag">Step 2</span>
-          <h2 id="create-user-title">Create user</h2>
-          <p class="help" id="create-user-help">Complete the setup and continue.</p>
-
-          <div id="structured-create-flow" class="hidden top-gap">
-            <div class="wizard-card stack">
-              <div class="grid-2">
-                <div class="field">
-                  <label for="onboarding-display-name">Display name</label>
-                  <input id="onboarding-display-name" placeholder="Your name or alias" />
+        <div class="shell">
+          <section class="page-intro">
+            <article class="page-intro-card">
+              <span class="eyebrow">Continuous onboarding</span>
+              <h1>User Context Workspace</h1>
+              <p>
+                Build or load the user once, review the signal surface here, then hand the same context into
+                prediction without restarting the workflow.
+              </p>
+            </article>
+            <aside class="page-summary-card">
+              <div class="metric-strip">
+                <div class="metric">
+                  <span class="mini">Active user</span>
+                  <strong id="setup-metric-user">None</strong>
                 </div>
-                <div class="field">
-                  <label for="onboarding-mbti">MBTI</label>
-                  <select id="onboarding-mbti"></select>
+                <div class="metric">
+                  <span class="mini">Signals</span>
+                  <strong id="setup-metric-signals">0</strong>
+                </div>
+                <div class="metric">
+                  <span class="mini">Recent notes</span>
+                  <strong id="setup-metric-notes">0</strong>
                 </div>
               </div>
-              <div class="wizard-progress">
-                <div class="mini" id="onboarding-progress-text">Question 1 / 1</div>
-                <div class="wizard-progress-track">
-                  <div class="wizard-progress-fill" id="onboarding-progress-fill"></div>
-                </div>
-              </div>
-              <div class="question-card">
-                <span class="section-tag" id="onboarding-question-label">Question</span>
-                <h3 id="onboarding-question-title">Loading question...</h3>
-                <p class="help" id="onboarding-question-prompt">Please wait while the questionnaire loads.</p>
-                <div class="wizard-option-list top-gap" id="onboarding-option-list"></div>
-              </div>
+              <p>
+                Pick a persona fast, or build your own. Once the summary looks right, the Predict step on the sidebar
+                becomes the natural next action.
+              </p>
               <div class="button-row inline">
-                <button class="secondary" id="structured-back-button" type="button">Back</button>
-                <button class="primary" id="structured-next-button" type="button">Next question</button>
+                <button class="primary" id="continue-to-predict-button" type="button">Continue to prediction</button>
+                <button class="secondary" id="launch-signature-demo-button" type="button">Launch signature demo</button>
               </div>
-            </div>
-          </div>
+            </aside>
+          </section>
 
-          <div id="import-create-flow" class="hidden top-gap">
-            <div class="wizard-card stack">
-              <div class="field">
-                <label for="import-display-name">Display name</label>
-                <input id="import-display-name" placeholder="Name for the imported profile" />
-              </div>
-              <div class="field">
-                <label for="chatgpt-export-file">ChatGPT export file</label>
-                <input id="chatgpt-export-file" type="file" accept=".zip,.json" />
-              </div>
-              <div class="field">
-                <label for="import-note">What this does</label>
-                <textarea id="import-note" disabled>It scans user-authored messages, extracts recurring preference statements, builds a starter profile summary, and creates seed memories for later decision prediction.</textarea>
-              </div>
-              <div class="button-row inline">
-                <button class="secondary" id="import-back-button" type="button">Back</button>
-                <button class="primary" id="import-profile-button" type="button">Import profile</button>
-              </div>
-            </div>
-          </div>
-        </article>
+          <div id="setup-status" class="status top-gap">Choose how you want to create or load the user.</div>
 
-        <article class="panel wizard-panel hidden" id="setup-step-3">
-          <span class="section-tag">Step 3</span>
-          <h2>Review summary</h2>
-          <p class="help">Quickly confirm the model looks right, then move to prediction.</p>
-          <div id="setup-review-empty" class="empty-state top-gap">
-            <strong>No active user summary yet.</strong>
-            <p>Create or load a user first, then return here to review the summary.</p>
-          </div>
-          <div id="setup-review-content" class="stack hidden top-gap">
-            <div class="split-cards">
-              <section class="list-card">
-                <span class="mini">Active user</span>
-                <strong id="setup-user-name">-</strong>
-                <p id="setup-user-summary" class="help">Profile summary will appear here.</p>
-              </section>
-              <section class="list-card">
-                <span class="mini">Signal summary</span>
-                <div class="chip-row top-gap-sm" id="signal-summary"></div>
-              </section>
-            </div>
-            <div class="split-cards">
-              <section class="list-card">
-                <h3>Profile Agent brief</h3>
-                <div class="signal-list top-gap-sm" id="stable-highlights">
-                  <div class="signal-item"><div class="mini">Stable preference highlights will appear here.</div></div>
-                </div>
-              </section>
-              <section class="list-card">
-                <h3>Recent State Agent brief</h3>
-                <div class="signal-list top-gap-sm" id="recent-summary-list">
-                  <div class="signal-item"><div class="mini">Recent-state highlights will appear here.</div></div>
-                </div>
-              </section>
-            </div>
-            <section class="list-card">
-              <h3>Reflection carry-over</h3>
-              <div class="signal-list top-gap-sm" id="reflection-summary-list">
-                <div class="signal-item"><div class="mini">Feedback carry-over will appear here once the user starts giving feedback.</div></div>
-              </div>
-            </section>
-            <div class="button-row inline">
-              <a class="button-link primary" href="/app/predict">Start predicting</a>
-              <button class="secondary" id="open-optional-adjustments-button" type="button">Open optional adjustments</button>
-              <button class="secondary" id="restart-setup-button" type="button">Choose another source</button>
-            </div>
-          </div>
-        </article>
-
-        <article class="panel wizard-panel hidden" id="setup-step-4">
-          <span class="section-tag">Step 4</span>
-          <h2>Optional adjustments</h2>
-          <p class="help">Only open this if you want to correct or inspect something.</p>
-          <div id="setup-adjustments-empty" class="empty-state top-gap">
-            <strong>No active user yet.</strong>
-            <p>Return to the earlier steps to create or load a user first.</p>
-          </div>
-          <div id="setup-adjustments-content" class="stack hidden top-gap">
-            <section class="list-card">
-              <div class="section-header">
+          <section class="panel top-gap">
+            <div class="wizard-stepper" id="setup-stepper">
+              <div class="wizard-step" data-step="1">
+                <span class="wizard-step-number">1</span>
                 <div>
-                  <h3>Pending signals</h3>
-                  <p class="help">Only pending signals are expanded by default. Reviewed signals stay collapsed below.</p>
+                  <strong>Source</strong>
+                  <div class="mini">Start point</div>
                 </div>
               </div>
-              <div class="signal-list top-gap-sm" id="pending-signal-list">
-                <div class="signal-item"><div class="mini">Pending signals will appear here.</div></div>
+              <div class="wizard-step" data-step="2">
+                <span class="wizard-step-number">2</span>
+                <div>
+                  <strong>Create</strong>
+                  <div class="mini">Answer or import</div>
+                </div>
               </div>
-            </section>
+              <div class="wizard-step" data-step="3">
+                <span class="wizard-step-number">3</span>
+                <div>
+                  <strong>Review</strong>
+                  <div class="mini">Quick check</div>
+                </div>
+              </div>
+              <div class="wizard-step" data-step="4">
+                <span class="wizard-step-number">4</span>
+                <div>
+                  <strong>Adjust</strong>
+                  <div class="mini">Optional only</div>
+                </div>
+              </div>
+            </div>
+          </section>
 
-            <section class="list-card">
-              <h3>Recent-state notes</h3>
-              <div class="stack top-gap-sm">
-                <div class="field">
-                  <label for="recent-state-note">Add a temporary recent-state note</label>
-                  <textarea id="recent-state-note" placeholder="Example: Today the user is unusually tired and wants the easiest option."></textarea>
-                </div>
-                <div class="button-row inline">
-                  <button class="secondary" id="add-recent-state-note-button" type="button">Add recent-state note</button>
-                </div>
-                <div class="signal-list" id="recent-state-list">
-                  <div class="signal-item"><div class="mini">Recent-state notes will appear here.</div></div>
-                </div>
+          <section class="wizard-shell top-gap">
+            <article class="panel wizard-panel" id="setup-step-1">
+              <span class="section-tag">Step 1</span>
+              <h2>Choose source</h2>
+              <p class="help">Choose the fastest way to get a usable profile.</p>
+              <div class="source-card-grid top-gap">
+                <button class="source-card" id="choose-source-sample" type="button">
+                  <span class="section-tag">Fastest</span>
+                  <strong>Load sample profile</strong>
+                  <p class="help">Open the built-in user and skip straight to review.</p>
+                </button>
+                <button class="source-card" id="choose-source-structured" type="button">
+                  <span class="section-tag">Guided</span>
+                  <strong>Structured onboarding</strong>
+                  <p class="help">Answer a few questions and build a fresh profile.</p>
+                </button>
+                <button class="source-card" id="choose-source-import" type="button">
+                  <span class="section-tag">Imported</span>
+                  <strong>Import ChatGPT export</strong>
+                  <p class="help">Upload a `.zip` or `conversations.json` for a starter profile.</p>
+                </button>
               </div>
-            </section>
-
-            <details class="list-card compact-details">
-              <summary class="summary-trigger">Reviewed signals</summary>
-              <div class="signal-list top-gap-sm" id="reviewed-signal-list">
-                <div class="signal-item"><div class="mini">Reviewed signals will appear here.</div></div>
-              </div>
-            </details>
-
-            <details class="list-card compact-details">
-              <summary class="summary-trigger">Advanced inspect</summary>
-              <div class="stack top-gap-sm">
-                <section>
-                  <h3>Recent decisions</h3>
-                  <div class="signal-list top-gap-sm" id="history-summary-list">
-                    <div class="signal-item"><div class="mini">Recent decisions will appear here.</div></div>
+              <div class="top-gap">
+                <div class="section-header">
+                  <div>
+                    <span class="section-tag">Showcase</span>
+                    <h3 class="top-gap-sm">Try a polished demo persona in one click</h3>
                   </div>
-                </section>
-                <section>
-                  <h3>Raw history payload</h3>
-                  <pre id="history-output" class="top-gap-sm">Recent history will appear here.</pre>
-                </section>
+                </div>
+                <div class="source-card-grid top-gap-sm" id="setup-persona-gallery">
+                  <div class="source-card">
+                    <strong>Loading personas...</strong>
+                    <p class="help">Bundled demo personas will appear here.</p>
+                  </div>
+                </div>
+              </div>
+              <div id="setup-existing-user-banner" class="list-card top-gap-sm hidden">
+                <span class="mini">Existing active user</span>
+                <strong id="existing-user-title">-</strong>
+                <p class="help">You already have an active user on this browser. You can review it again or choose a new source.</p>
+                <div class="button-row inline top-gap-sm">
+                  <button class="secondary" id="resume-existing-user-button" type="button">Review current user</button>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel wizard-panel hidden" id="setup-step-2">
+              <span class="section-tag">Step 2</span>
+              <h2 id="create-user-title">Create user</h2>
+              <p class="help" id="create-user-help">Complete the setup and continue.</p>
+
+              <div id="structured-create-flow" class="hidden top-gap">
+                <div class="wizard-card stack">
+                  <div class="grid-2">
+                    <div class="field">
+                      <label for="onboarding-display-name">Display name</label>
+                      <input id="onboarding-display-name" placeholder="Your name or alias" />
+                    </div>
+                    <div class="field">
+                      <label for="onboarding-mbti">MBTI</label>
+                      <select id="onboarding-mbti"></select>
+                    </div>
+                  </div>
+                  <div class="wizard-progress">
+                    <div class="mini" id="onboarding-progress-text">Question 1 / 1</div>
+                    <div class="wizard-progress-track">
+                      <div class="wizard-progress-fill" id="onboarding-progress-fill"></div>
+                    </div>
+                  </div>
+                  <div class="question-card">
+                    <span class="section-tag" id="onboarding-question-label">Question</span>
+                    <h3 id="onboarding-question-title">Loading question...</h3>
+                    <p class="help" id="onboarding-question-prompt">Please wait while the questionnaire loads.</p>
+                    <div class="wizard-option-list top-gap" id="onboarding-option-list"></div>
+                  </div>
+                  <div class="button-row inline">
+                    <button class="secondary" id="structured-back-button" type="button">Back</button>
+                    <button class="primary" id="structured-next-button" type="button">Next question</button>
+                  </div>
+                </div>
+              </div>
+
+              <div id="import-create-flow" class="hidden top-gap">
+                <div class="wizard-card stack">
+                  <div class="field">
+                    <label for="import-display-name">Display name</label>
+                    <input id="import-display-name" placeholder="Name for the imported profile" />
+                  </div>
+                  <div class="field">
+                    <label for="chatgpt-export-file">ChatGPT export file</label>
+                    <input id="chatgpt-export-file" type="file" accept=".zip,.json" />
+                  </div>
+                  <div class="field">
+                    <label for="import-note">What this does</label>
+                    <textarea id="import-note" disabled>It scans user-authored messages, extracts recurring preference statements, builds a starter profile summary, and creates seed memories for later decision prediction.</textarea>
+                  </div>
+                  <div class="button-row inline">
+                    <button class="secondary" id="import-back-button" type="button">Back</button>
+                    <button class="primary" id="import-profile-button" type="button">Import profile</button>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel wizard-panel hidden" id="setup-step-3">
+              <span class="section-tag">Step 3</span>
+              <h2>Review summary</h2>
+              <p class="help">Quickly confirm the model looks right, then move to prediction without losing context.</p>
+              <div id="setup-review-empty" class="empty-state top-gap">
+                <strong>No active user summary yet.</strong>
+                <p>Create or load a user first, then return here to review the summary.</p>
+              </div>
+              <div id="setup-review-content" class="stack hidden top-gap">
                 <div class="split-cards">
                   <section class="list-card">
-                    <h3>Raw profile card</h3>
-                    <pre id="profile-card-output">Profile card output will appear here.</pre>
+                    <span class="mini">Active user</span>
+                    <strong id="setup-user-name">-</strong>
+                    <p id="setup-user-summary" class="help">Profile summary will appear here.</p>
                   </section>
                   <section class="list-card">
-                    <h3>Raw recent-state summary</h3>
-                    <pre id="recent-state-summary-output">Recent state summary will appear here.</pre>
+                    <span class="mini">Signal summary</span>
+                    <div class="chip-row top-gap-sm" id="signal-summary"></div>
                   </section>
                 </div>
+                <div class="split-cards">
+                  <section class="list-card">
+                    <h3>Profile Agent brief</h3>
+                    <div class="signal-list readout-list top-gap-sm" id="stable-highlights">
+                      <div class="signal-item"><div class="mini">Stable preference highlights will appear here.</div></div>
+                    </div>
+                  </section>
+                  <section class="list-card">
+                    <h3>Recent State Agent brief</h3>
+                    <div class="signal-list readout-list top-gap-sm" id="recent-summary-list">
+                      <div class="signal-item"><div class="mini">Recent-state highlights will appear here.</div></div>
+                    </div>
+                  </section>
+                </div>
+                <section class="list-card">
+                  <h3>Reflection carry-over</h3>
+                  <div class="signal-list readout-list top-gap-sm" id="reflection-summary-list">
+                    <div class="signal-item"><div class="mini">Feedback carry-over will appear here once the user starts giving feedback.</div></div>
+                  </div>
+                </section>
+                <section class="list-card next-step-panel" id="setup-next-step-panel">
+                  <span class="section-tag">Next step</span>
+                  <h3>Move into prediction</h3>
+                  <p class="help" id="setup-next-step-summary">Once this summary looks right, continue to prediction with the same user and a prefilled starting point.</p>
+                  <div class="button-row inline top-gap-sm">
+                    <button class="primary" id="review-to-predict-button" type="button">Continue to prediction</button>
+                    <button class="secondary" id="open-optional-adjustments-button" type="button">Open optional adjustments</button>
+                    <button class="secondary" id="restart-setup-button" type="button">Choose another source</button>
+                  </div>
+                </section>
               </div>
-            </details>
+            </article>
 
-            <div class="button-row inline">
-              <button class="secondary" id="back-to-summary-button" type="button">Back to summary</button>
-              <a class="button-link primary" href="/app/predict">Start predicting</a>
-            </div>
-          </div>
-        </article>
-      </section>
+            <article class="panel wizard-panel hidden" id="setup-step-4">
+              <span class="section-tag">Step 4</span>
+              <h2>Optional adjustments</h2>
+              <p class="help">Correct or inspect anything here, then continue into prediction from the same workflow.</p>
+              <div id="setup-adjustments-empty" class="empty-state top-gap">
+                <strong>No active user yet.</strong>
+                <p>Return to the earlier steps to create or load a user first.</p>
+              </div>
+              <div id="setup-adjustments-content" class="stack hidden top-gap">
+                <section class="list-card">
+                  <div class="section-header">
+                    <div>
+                      <h3>Pending signals</h3>
+                      <p class="help">Only pending signals are expanded by default. Reviewed signals stay collapsed below.</p>
+                    </div>
+                  </div>
+                  <div class="signal-list top-gap-sm" id="pending-signal-list">
+                    <div class="signal-item"><div class="mini">Pending signals will appear here.</div></div>
+                  </div>
+                </section>
+
+                <section class="list-card">
+                  <h3>Recent-state notes</h3>
+                  <div class="stack top-gap-sm">
+                    <div class="field">
+                      <label for="recent-state-note">Add a temporary recent-state note</label>
+                      <textarea id="recent-state-note" placeholder="Example: Today the user is unusually tired and wants the easiest option."></textarea>
+                    </div>
+                    <div class="button-row inline">
+                      <button class="secondary" id="add-recent-state-note-button" type="button">Add recent-state note</button>
+                    </div>
+                    <div class="signal-list" id="recent-state-list">
+                      <div class="signal-item"><div class="mini">Recent-state notes will appear here.</div></div>
+                    </div>
+                  </div>
+                </section>
+
+                <details class="list-card compact-details">
+                  <summary class="summary-trigger">Reviewed signals</summary>
+                  <div class="signal-list top-gap-sm" id="reviewed-signal-list">
+                    <div class="signal-item"><div class="mini">Reviewed signals will appear here.</div></div>
+                  </div>
+                </details>
+
+                <details class="list-card compact-details">
+                  <summary class="summary-trigger">Advanced inspect</summary>
+                  <div class="stack top-gap-sm">
+                    <section>
+                      <h3>Recent decisions</h3>
+                      <div class="signal-list top-gap-sm" id="history-summary-list">
+                        <div class="signal-item"><div class="mini">Recent decisions will appear here.</div></div>
+                      </div>
+                    </section>
+                    <section>
+                      <h3>Raw history payload</h3>
+                      <pre id="history-output" class="top-gap-sm">Recent history will appear here.</pre>
+                    </section>
+                    <div class="split-cards">
+                      <section class="list-card">
+                        <h3>Raw profile card</h3>
+                        <pre id="profile-card-output">Profile card output will appear here.</pre>
+                      </section>
+                      <section class="list-card">
+                        <h3>Raw recent-state summary</h3>
+                        <pre id="recent-state-summary-output">Recent state summary will appear here.</pre>
+                      </section>
+                    </div>
+                  </div>
+                </details>
+
+                <div class="button-row inline">
+                  <button class="secondary" id="back-to-summary-button" type="button">Back to summary</button>
+                  <button class="primary" id="adjustments-to-predict-button" type="button">Continue to prediction</button>
+                </div>
+              </div>
+            </article>
+          </section>
+
+          <footer class="app-footer">
+            System ID: BCD-STUDIO-V1 | Surface: User Context Workspace | Mode: Guided Setup
+          </footer>
+        </div>
+      </div>
     </div>
 
     <script src="/app/assets/app.js"></script>
