@@ -1,0 +1,97 @@
+goal: >
+  Build bcd V1 as a local-first personal choice app where a localhost GUI
+  uses the Codex CLI to show the option the user is most likely to choose,
+  based on a lightweight profile and summarized decision memories.
+
+constraints:
+  - Greenfield rebuild; previous implementation has been intentionally removed.
+  - bcd.md remains the project direction document, not README or PRD.
+  - Use TypeScript/Node local server with React/Vite GUI.
+  - Store user data under ~/.bcd, not inside the repository.
+  - Use Markdown/JSON file memory; no SQLite, vector DB, or external database in V1.
+  - Codex CLI is the only V1 AI adapter.
+  - Do not implement an internal prediction/scoring engine.
+  - Do not return fallback predictions if Codex CLI fails.
+  - Keep bcd.md and .omx ignored by git.
+  - Multi-agent/subagent choice debate is a future extension, not a V1 requirement.
+
+acceptance_criteria:
+  - First launch shows onboarding when no profile exists.
+  - Existing profile opens directly to the decision input flow.
+  - Onboarding captures MBTI plus a small mixed set of preference questions.
+  - Profile is stored as ~/.bcd/profile.md.
+  - User can enter a question, at least two options, and optional context.
+  - GUI can ask Codex to suggest personalized options, requiring user confirmation before prediction.
+  - bcd gathers candidate decision cards by tag/category plus recency.
+  - Codex selects relevant decision cards before final choice prediction.
+  - Prediction output is structured JSON with a short human-readable explanation.
+  - Result copy uses the stance "you would probably choose this," not "this is correct."
+  - Feedback accepts actual choice, optional reason tags, and optional short reason text.
+  - Feedback save returns quickly while decision-card generation runs in the background.
+  - Decision cards are stored as Markdown with frontmatter.
+  - Debug logs keep only the most recent N raw requests/responses.
+  - GUI includes onboarding, decision flow, profile view, and memory card list.
+  - Codex CLI failure shows a clear error and does not fabricate a prediction.
+
+ontology_schema:
+  name: BcdLocalChoiceApp
+  description: Local user-owned choice memory and Codex-powered choice display system.
+  fields:
+    - name: profile
+      type: object
+      description: MBTI cold-start hint, profile summary, and preference signals.
+    - name: decision_request
+      type: object
+      description: User question, confirmed options, and optional context.
+    - name: option_suggestion
+      type: object
+      description: Codex-suggested options requiring user confirmation.
+    - name: decision_card
+      type: object
+      description: Summarized memory of an actual user choice with frontmatter metadata.
+    - name: memory_selection
+      type: object
+      description: Codex-selected relevant cards for the current decision.
+    - name: prediction_result
+      type: object
+      description: JSON choice result, explanation, confidence, and used memory ids.
+    - name: feedback
+      type: object
+      description: Actual chosen option plus optional reason tags/text.
+    - name: debug_log
+      type: object
+      description: Short-retention raw request/response log for local debugging.
+
+evaluation_principles:
+  - name: philosophical_alignment
+    description: Must show the most user-like choice, not objective correctness.
+    weight: 0.30
+  - name: simplicity
+    description: Must stay thin around Codex CLI instead of becoming a prediction engine.
+    weight: 0.20
+  - name: local_ownership
+    description: User data must remain readable, local, and file-based.
+    weight: 0.20
+  - name: low_friction_ux
+    description: Onboarding, feedback, and background memory creation must avoid user fatigue.
+    weight: 0.15
+  - name: extensibility
+    description: Adapter and prompt structure should allow future Codex subagent debate.
+    weight: 0.15
+
+exit_conditions:
+  - name: v1_scope_complete
+    description: Core localhost GUI choice loop works end to end.
+    criteria: Onboard -> decide -> Codex predict -> feedback -> card generation -> future memory reuse.
+  - name: no_legacy_engine
+    description: Previous scoring/retrieval framework has not reappeared.
+    criteria: No internal scorer, vector DB, ToolRec/AgentCF engine, or fallback predictor exists.
+  - name: local_data_contract_met
+    description: All user-owned data uses ~/.bcd file storage.
+    criteria: Profile, cards, config, and debug logs are created under ~/.bcd.
+
+metadata:
+  seed_version: 1
+  source: interview_fallback
+  ambiguity_score: 0.12
+  project_type: greenfield

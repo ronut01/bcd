@@ -1,5 +1,8 @@
 .DS_Store
 .env
 .env.*
+dist/
+node_modules/
+coverage/
 bcd.md
 .omx/
