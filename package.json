@@ -1,8 +1,31 @@
 {
   "name": "bcd",
   "version": "0.1.0",
+  "description": "Local-first personal choice mirror powered by Codex CLI.",
   "private": true,
+  "license": "MIT",
   "type": "module",
+  "author": "Sangyoon Kwon",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ronut01/bcd.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ronut01/bcd/issues"
+  },
+  "homepage": "https://github.com/ronut01/bcd#readme",
+  "keywords": [
+    "local-first",
+    "codex",
+    "ai",
+    "decision-support",
+    "personal-knowledge",
+    "react",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:server": "tsx watch src/server/index.ts",
