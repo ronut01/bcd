@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { validateDeepPrediction, validateNormalizedExternalProfile, validatePrediction } from "./validators.js";
+import {
+  validateDeepPrediction,
+  validateDeepPredictionWithMemorySelection,
+  validateNormalizedExternalProfile,
+  validatePrediction,
+  validatePredictionWithMemorySelection
+} from "./validators.js";
 
 describe("normalized external profile validator", () => {
   it("accepts a complete normalized profile", () => {
@@ -120,6 +126,44 @@ describe("fast prediction validator", () => {
         new Set()
       )
     ).toThrow();
+  });
+
+  it("validates combined memory selection plus fast prediction output", () => {
+    const validated = validatePredictionWithMemorySelection(
+      {
+        memorySelection: { selectedMemoryIds: ["mem_1", "mem_2"], reasoning: "Quiet focus memory is relevant." },
+        prediction: {
+          chosenOption: "Tea",
+          explanation: "Calmer ritual.",
+          confidence: "medium",
+          usedMemoryIds: ["mem_1", "mem_2"]
+        }
+      },
+      ["Tea", "Coffee"],
+      new Set(["mem_1"])
+    );
+
+    expect(validated.memorySelection.selectedMemoryIds).toEqual(["mem_1"]);
+    expect(validated.prediction.usedMemoryIds).toEqual(["mem_1"]);
+  });
+});
+
+describe("combined deep prediction validator", () => {
+  it("requires synthesis memories to be selected memories", () => {
+    const raw = {
+      memorySelection: { selectedMemoryIds: ["mem_1"], reasoning: "Relevant." },
+      ...validDeepPrediction()
+    };
+
+    expect(validateDeepPredictionWithMemorySelection(raw, ["Home desk", "Cafe"], new Set(["mem_1"]))).toMatchObject({
+      memorySelection: { selectedMemoryIds: ["mem_1"] },
+      synthesis: { usedMemoryIds: ["mem_1"] }
+    });
+
+    raw.memorySelection.selectedMemoryIds = [];
+    expect(() => validateDeepPredictionWithMemorySelection(raw, ["Home desk", "Cafe"], new Set(["mem_1"]))).toThrow(
+      /usedMemoryIds|memory/i
+    );
   });
 });
 

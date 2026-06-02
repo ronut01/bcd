@@ -149,6 +149,29 @@ describe("manual onboarding route", () => {
 
 
 describe("prediction route adaptive modes", () => {
+  it("skips Codex memory selection when no candidate memories exist", async () => {
+    const fakeCodex = new FakeCodex();
+    const app = await testApp(fakeCodex);
+    try {
+      await app.storage.writeExternalProfileImport("quiet focus", normalizedProfile());
+      const result = await app.request("POST", "/api/predict", {
+        confirmedOptions: true,
+        request: { question: "Tea or coffee?", options: ["Tea", "Coffee"], category: "drink" }
+      });
+
+      expect(result.status).toBe(200);
+      expect(result.payload.candidateMemoryCount).toBe(0);
+      expect(result.payload.memorySelection).toEqual({
+        selectedMemoryIds: [],
+        reasoning: "No prior decision memories exist yet."
+      });
+      expect(result.payload.prediction.usedMemoryIds).toEqual([]);
+      expect(fakeCodex.purposes).toEqual(["prediction"]);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("returns the existing fast prediction contract plus mode and gate metadata", async () => {
     const fakeCodex = new FakeCodex();
     const app = await testApp(fakeCodex);
@@ -165,7 +188,7 @@ describe("prediction route adaptive modes", () => {
       expect(result.payload.candidateMemoryCount).toBe(1);
       expect(result.payload.mode).toBe("fast");
       expect(result.payload.gate).toMatchObject({ mode: "fast", stage: "fast-only" });
-      expect(fakeCodex.purposes).toEqual(["memory_selection", "prediction"]);
+      expect(fakeCodex.purposes).toEqual(["prediction"]);
     } finally {
       await app.close();
     }
@@ -212,7 +235,7 @@ describe("prediction route adaptive modes", () => {
       expect(result.payload.mode).toBe("deep");
       expect(result.payload.gate.stage).toBe("post-fast");
       expect(result.payload.gate.reasons).toEqual(expect.arrayContaining(["low_fast_confidence", "post_fast_escalation"]));
-      expect(fakeCodex.purposes).toEqual(["memory_selection", "prediction", "prediction_deep"]);
+      expect(fakeCodex.purposes).toEqual(["prediction", "prediction_deep"]);
     } finally {
       await app.close();
     }
@@ -241,10 +264,15 @@ describe("prediction route adaptive modes", () => {
     vi.useFakeTimers();
     const start = new Date("2026-05-15T00:00:00.000Z").getTime();
     vi.setSystemTime(start);
-    const fakeCodex = new FakeCodex({ afterPurpose: { memory_selection: () => vi.setSystemTime(start + 169_000) } });
+    const fakeCodex = new FakeCodex();
     const app = await testApp(fakeCodex);
     try {
       await seedProfile(app.storage);
+      const originalGatherCandidateCards = app.storage.gatherCandidateCards.bind(app.storage);
+      app.storage.gatherCandidateCards = async (decision) => {
+        vi.setSystemTime(start + 169_000);
+        return originalGatherCandidateCards(decision);
+      };
       const result = await app.request("POST", "/api/predict", {
         confirmedOptions: true,
         request: { question: "Please use deep analysis: Tea or Coffee?", options: ["Tea", "Coffee"] }
@@ -253,7 +281,7 @@ describe("prediction route adaptive modes", () => {
       expect(result.status).toBe(200);
       expect(result.payload.mode).toBe("fast");
       expect(result.payload.gate.reasons).toContain("insufficient_deep_budget");
-      expect(fakeCodex.purposes).toEqual(["memory_selection", "prediction"]);
+      expect(fakeCodex.purposes).toEqual(["prediction"]);
     } finally {
       await app.close();
     }
@@ -279,7 +307,7 @@ describe("prediction route adaptive modes", () => {
       expect(result.payload.mode).toBe("fast");
       expect(result.payload.prediction.confidence).toBe("low");
       expect(result.payload.gate.reasons).toContain("insufficient_deep_budget");
-      expect(fakeCodex.purposes).toEqual(["memory_selection", "prediction"]);
+      expect(fakeCodex.purposes).toEqual(["prediction"]);
     } finally {
       await app.close();
     }
@@ -386,19 +414,36 @@ class FakeCodex implements CodexJsonRunner {
     if (purpose === "profile_import_normalization") {
       return normalizedProfile();
     }
-    if (purpose === "memory_selection") {
-      return { selectedMemoryIds: [firstCandidateId(prompt) ?? "mem_1"], reasoning: "Prior quiet-focus memory is relevant." };
-    }
     if (purpose === "prediction") {
-      return {
+      const prediction = {
         chosenOption: this.options.fastPrediction?.chosenOption ?? firstOption(prompt) ?? "Tea",
         explanation: this.options.fastPrediction?.explanation ?? "You usually choose the calmer ritual.",
         confidence: this.options.fastPrediction?.confidence ?? "medium",
-        usedMemoryIds: this.options.fastPrediction?.usedMemoryIds ?? [firstMemoryId(prompt) ?? "mem_1"]
+        usedMemoryIds: this.options.fastPrediction?.usedMemoryIds ?? [firstEvidenceMemoryId(prompt) ?? "mem_1"]
       };
+      if (prompt.includes('"memorySelection"')) {
+        return {
+          memorySelection: {
+            selectedMemoryIds: [firstCandidateId(prompt) ?? "mem_1"],
+            reasoning: "Prior quiet-focus memory is relevant."
+          },
+          prediction
+        };
+      }
+      return prediction;
     }
     if (purpose === "prediction_deep") {
-      return deepPredictionRaw(firstOption(prompt) ?? "Home desk", firstMemoryId(prompt) ?? "mem_1");
+      const raw = deepPredictionRaw(firstOption(prompt) ?? "Home desk", firstEvidenceMemoryId(prompt) ?? "mem_1");
+      if (prompt.includes('"memorySelection"')) {
+        return {
+          memorySelection: {
+            selectedMemoryIds: [firstCandidateId(prompt) ?? "mem_1"],
+            reasoning: "Prior quiet-focus memory is relevant."
+          },
+          ...raw
+        };
+      }
+      return raw;
     }
     if (purpose === "decision_card") {
       return {
@@ -483,7 +528,7 @@ function deepPredictionRaw(chosenOption = "Home desk", memoryId = "mem_1") {
 
 
 function firstOption(prompt: string): string | undefined {
-  const match = prompt.match(/Decision:\n({.*})\nMemories:/s);
+  const match = prompt.match(/Decision:\n({.*})\n(?:Memories|Candidates):/s);
   if (!match) return undefined;
   try {
     const parsed = JSON.parse(match[1]) as { options?: string[] };
@@ -491,6 +536,10 @@ function firstOption(prompt: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function firstEvidenceMemoryId(prompt: string): string | undefined {
+  return firstMemoryId(prompt) ?? firstCandidateId(prompt);
 }
 
 function firstCandidateId(prompt: string): string | undefined {

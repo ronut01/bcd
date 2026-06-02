@@ -149,8 +149,7 @@ export function evaluatePostFastEscalation(
   const highStakes = baseGate.signals.highStakes ?? hasHighStakesSignal(request);
   const shouldEscalateLowConfidence = fastPrediction.confidence === "low";
   const shouldEscalateHighStakes = highStakes && fastPrediction.confidence !== "high";
-  const remainingBudgetMs = remainingRouteBudgetMs(routeStartedAt, now);
-  const elapsedMs = Math.max(0, now - routeStartedAt);
+  const budgetSignals = routeBudgetSignals(routeStartedAt, now);
   const baseReasons = baseGate.reasons.filter((reason) => reason !== GATE_REASONS.ordinaryBelowThreshold);
   const escalationReasons: string[] = [];
 
@@ -171,8 +170,7 @@ export function evaluatePostFastEscalation(
         ...baseGate.signals,
         highStakes,
         fastConfidence: fastPrediction.confidence,
-        elapsedMs,
-        remainingBudgetMs
+        ...budgetSignals
       }
     };
   }
@@ -187,8 +185,7 @@ export function evaluatePostFastEscalation(
         ...baseGate.signals,
         highStakes,
         fastConfidence: fastPrediction.confidence,
-        elapsedMs,
-        remainingBudgetMs
+        ...budgetSignals
       }
     };
   }
@@ -203,8 +200,7 @@ export function evaluatePostFastEscalation(
       ...baseGate.signals,
       highStakes,
       fastConfidence: fastPrediction.confidence,
-      elapsedMs,
-      remainingBudgetMs
+      ...budgetSignals
     }
   };
 }
@@ -217,8 +213,7 @@ export function withInsufficientDeepBudget(gate: PredictionGate, routeStartedAt:
     reasons: uniqueReasons([...gate.reasons, GATE_REASONS.insufficientDeepBudget]),
     signals: {
       ...gate.signals,
-      elapsedMs: Math.max(0, now - routeStartedAt),
-      remainingBudgetMs: remainingRouteBudgetMs(routeStartedAt, now)
+      ...routeBudgetSignals(routeStartedAt, now)
     }
   };
 }
@@ -229,6 +224,16 @@ export function canAttemptDeep(routeStartedAt: number, now = Date.now()): boolea
 
 export function remainingRouteBudgetMs(routeStartedAt: number, now = Date.now()): number {
   return Math.max(0, predictRouteBudgetMs() - Math.max(0, now - routeStartedAt));
+}
+
+function routeBudgetSignals(
+  routeStartedAt: number,
+  now: number
+): Pick<PredictionGate["signals"], "elapsedMs" | "remainingBudgetMs"> {
+  return {
+    elapsedMs: Math.max(0, now - routeStartedAt),
+    remainingBudgetMs: remainingRouteBudgetMs(routeStartedAt, now)
+  };
 }
 
 export function predictRouteBudgetMs(): number {

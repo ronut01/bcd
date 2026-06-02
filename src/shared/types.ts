@@ -44,6 +44,12 @@ export interface SuggestedOption {
   notes?: string;
 }
 
+export interface OptionSuggestionRequest {
+  question: string;
+  options?: string[];
+  context?: string;
+}
+
 export interface OptionSuggestion {
   options: SuggestedOption[];
   rationale?: string;

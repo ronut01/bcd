@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildDecisionCardPrompt,
   buildExternalAiProfilePrompt,
-  buildMemorySelectionPrompt,
   buildOptionSuggestionPrompt,
   buildPredictionPrompt,
+  buildPredictionWithMemoryPrompt,
   buildDeepPredictionPrompt,
+  buildDeepPredictionWithMemoryPrompt,
   buildProfileImportNormalizationPrompt
 } from "./prompts.js";
 
@@ -74,8 +75,8 @@ describe("prediction prompt", () => {
 
     const prompts = [
       buildOptionSuggestionPrompt(normalizedProfile, { question: decision.question, context: "Need focus" }),
-      buildMemorySelectionPrompt(normalizedProfile, decision, []),
       buildPredictionPrompt(normalizedProfile, decision, []),
+      buildPredictionWithMemoryPrompt(normalizedProfile, decision, []),
       buildDecisionCardPrompt(normalizedProfile, feedback)
     ];
 
@@ -109,6 +110,61 @@ describe("prediction prompt", () => {
     expect(prompt).toContain("Chooses quiet focus");
     expect(prompt).toContain("chosenOption must exactly match");
     expect(prompt).not.toContain(RAW_SENTINEL);
+  });
+
+  it("treats user-authored wording as grounded weak evidence", () => {
+    const prompt = buildPredictionPrompt(
+      normalizedProfile,
+      {
+        question: "Should I stay home where I can finally rest, or go out because I guess I should?",
+        options: ["Stay home", "Go out"],
+        context: "I keep saying I should go out, but the quiet option sounds easier."
+      },
+      []
+    );
+
+    expect(prompt).toContain("user's own wording");
+    expect(prompt).toContain("weak signals");
+    expect(prompt).toContain("do not overfit");
+    expect(prompt).toContain("Stay home");
+  });
+
+  it("can select memories and predict in one fast Codex call", () => {
+    const prompt = buildPredictionWithMemoryPrompt(
+      normalizedProfile,
+      { question: "Work from home or cafe?", options: ["Home", "Cafe"] },
+      [
+        {
+          id: "mem_1",
+          createdAt: "2026-05-01T00:00:00.000Z",
+          tags: ["focus"],
+          actualChoice: "Home",
+          title: "Home for focus",
+          summary: "Chose home for deep work.",
+          body: "",
+          fileName: "mem_1.md"
+        }
+      ]
+    );
+
+    expect(prompt).toContain("First select relevant prior memories");
+    expect(prompt).toContain("memorySelection");
+    expect(prompt).toContain("unselected Candidates as ignored");
+    expect(prompt).toContain("prediction.usedMemoryIds");
+    expect(prompt).toContain("mem_1");
+  });
+
+  it("includes existing options when suggesting additional options", () => {
+    const prompt = buildOptionSuggestionPrompt(normalizedProfile, {
+      question: "What should I do this weekend?",
+      options: ["Stay home", "Go hiking"],
+      context: "Low energy but wants something memorable."
+    });
+
+    expect(prompt).toContain("additional options");
+    expect(prompt).toContain("avoid duplicating");
+    expect(prompt).toContain("Stay home");
+    expect(prompt).toContain("Go hiking");
   });
 });
 
@@ -175,5 +231,31 @@ describe("deep prediction prompt", () => {
 
     expect(prompt.toLowerCase()).toContain("concise");
     expect(prompt.toLowerCase()).toContain("short");
+  });
+
+  it("can select memories and run the deep panel in one Codex call", () => {
+    const prompt = buildDeepPredictionWithMemoryPrompt(
+      normalizedProfile,
+      { question: "Where work?", options: ["Home desk", "Cafe"] },
+      [
+        {
+          id: "mem_1",
+          createdAt: "2026-05-01T00:00:00.000Z",
+          tags: ["focus"],
+          actualChoice: "Home desk",
+          title: "Home desk for focus",
+          summary: "Chose the quiet home desk.",
+          body: "",
+          fileName: "mem_1.md"
+        }
+      ],
+      { mode: "deep", stage: "pre", score: 100, threshold: 0, reasons: ["pre_gate_deep"], signals: { explicitDeepRequest: true } }
+    );
+
+    expect(prompt).toContain("memorySelection");
+    expect(prompt).toContain("unselected Candidates as ignored");
+    expect(prompt).toContain("panelJudgments");
+    expect(prompt).toContain("synthesis.usedMemoryIds");
+    expect(prompt).toContain("mem_1");
   });
 });

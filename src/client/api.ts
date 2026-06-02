@@ -8,6 +8,7 @@ import type {
   FeedbackPayload,
   OnboardingInput,
   OptionSuggestion,
+  OptionSuggestionRequest,
   PredictionResponse
 } from "../shared/types.js";
 
@@ -46,7 +47,7 @@ export async function checkCodexConnection(): Promise<CodexConnectionStatus> {
   }, 75_000);
 }
 
-export async function suggestOptions(input: Pick<DecisionRequest, "question" | "context">): Promise<OptionSuggestion> {
+export async function suggestOptions(input: OptionSuggestionRequest): Promise<OptionSuggestion> {
   return fetchJson("/api/options/suggest", {
     method: "POST",
     body: JSON.stringify(input)

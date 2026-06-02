@@ -120,6 +120,21 @@ describe("prediction gate", () => {
     expect(preGate.reasons).toContain(GATE_REASONS.insufficientDeepBudget);
   });
 
+  it("records elapsed and remaining budget metadata when deep routing is reconsidered", () => {
+    const preGate = evaluatePrePredictionGate(baseRequest, "# Profile");
+    const postFastGate = evaluatePostFastEscalation(
+      preGate,
+      baseRequest,
+      { chosenOption: "Tea", explanation: "Weak signal.", confidence: "low", usedMemoryIds: [] },
+      10_000,
+      45_000
+    );
+    const forcedFastGate = withInsufficientDeepBudget(postFastGate, 10_000, 45_000);
+
+    expect(postFastGate.signals).toMatchObject({ elapsedMs: 35_000, remainingBudgetMs: 135_000 });
+    expect(forcedFastGate.signals).toMatchObject({ elapsedMs: 35_000, remainingBudgetMs: 135_000 });
+  });
+
   it("skips post-fast escalation and records insufficient budget when remaining budget is too low", () => {
     const preGate = evaluatePrePredictionGate(baseRequest, "# Profile");
     const gate = evaluatePostFastEscalation(preGate, baseRequest, { chosenOption: "Tea", explanation: "Weak signal.", confidence: "low", usedMemoryIds: [] }, 0, 40_001);
@@ -136,4 +151,3 @@ describe("prediction gate", () => {
     expect(canAttemptDeep(0, 170_000 - required + 1)).toBe(false);
   });
 });
-

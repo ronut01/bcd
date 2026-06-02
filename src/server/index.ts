@@ -6,10 +6,11 @@ import { CodexCliError, CodexClient } from "./codex.js";
 import {
   buildDecisionCardPrompt,
   buildDeepPredictionPrompt,
+  buildDeepPredictionWithMemoryPrompt,
   buildExternalAiProfilePrompt,
-  buildMemorySelectionPrompt,
   buildOptionSuggestionPrompt,
   buildPredictionPrompt,
+  buildPredictionWithMemoryPrompt,
   buildProfileImportNormalizationPrompt
 } from "./prompts.js";
 import {
@@ -22,15 +23,18 @@ import { BcdStorage } from "./storage.js";
 import {
   validateDecisionCardDraft,
   validateDeepPrediction,
-  validateMemorySelection,
+  validateDeepPredictionWithMemorySelection,
   validateNormalizedExternalProfile,
   validateOptionSuggestion,
-  validatePrediction
+  validatePrediction,
+  validatePredictionWithMemorySelection
 } from "./validators.js";
 import type {
   DecisionRequest,
+  DecisionCard,
   ExternalProfileImportRequest,
   FeedbackPayload,
+  MemorySelection,
   OnboardingInput,
   PanelJudgment,
   PanelJudgmentRole,
@@ -148,8 +152,9 @@ export function createBcdServer(options: BcdServerOptions = {}) {
       const profileMarkdown = await requireProfile();
       const body = asRecord(await readJson(request));
       const question = nonEmptyString(body.question, "question");
+      const options = optionalStringArray(body.options);
       const context = optionalString(body.context);
-      const prompt = buildOptionSuggestionPrompt(profileMarkdown, { question, context });
+      const prompt = buildOptionSuggestionPrompt(profileMarkdown, { question, options, context });
       const suggestion = await codex.runJson("option_suggestion", prompt, validateOptionSuggestion);
       sendJson(response, 200, suggestion);
       return;
@@ -166,15 +171,10 @@ export function createBcdServer(options: BcdServerOptions = {}) {
       const decision = validateDecisionRequest(body.request);
       const candidates = await storage.gatherCandidateCards(decision);
       const candidateIds = new Set(candidates.map((card) => card.id));
-      const selectionPrompt = buildMemorySelectionPrompt(profileMarkdown, decision, candidates);
-      const selection = await codex.runJson("memory_selection", selectionPrompt, (value) =>
-        validateMemorySelection(value, candidateIds)
-      );
-      const selectedCards = candidates.filter((card) => selection.selectedMemoryIds.includes(card.id));
-      const selectedIds = new Set(selectedCards.map((card) => card.id));
       const preGate = evaluatePrePredictionGate(decision, profileMarkdown);
 
-      const runDeepPrediction = async (gate: PredictionGate) => {
+      const runDeepPrediction = async (gate: PredictionGate, selection: MemorySelection, selectedCards: DecisionCard[]) => {
+        const selectedIds = new Set(selectedCards.map((card) => card.id));
         const deepPrompt = buildDeepPredictionPrompt(profileMarkdown, decision, selectedCards, gate);
         const deepPrediction = await codex.runJson("prediction_deep", deepPrompt, (value) =>
           validateDeepPrediction(value, decision.options, selectedIds)
@@ -190,27 +190,53 @@ export function createBcdServer(options: BcdServerOptions = {}) {
       };
 
       if (preGate.mode === "deep" && canAttemptDeep(routeStartedAt)) {
-        await runDeepPrediction(preGate);
+        if (candidates.length === 0) {
+          await runDeepPrediction(preGate, noCandidateMemorySelection(), []);
+          return;
+        }
+
+        const deepPrompt = buildDeepPredictionWithMemoryPrompt(profileMarkdown, decision, candidates, preGate);
+        const deepPrediction = await codex.runJson("prediction_deep", deepPrompt, (value) =>
+          validateDeepPredictionWithMemorySelection(value, decision.options, candidateIds)
+        );
+        sendJson(response, 200, {
+          prediction: deepPrediction.synthesis,
+          memorySelection: deepPrediction.memorySelection,
+          candidateMemoryCount: candidates.length,
+          mode: "deep",
+          gate: { ...preGate, mode: "deep" },
+          panelJudgments: deepPrediction.panelJudgments
+        });
         return;
       }
 
       const gateForFast = preGate.mode === "deep"
         ? withInsufficientDeepBudget(preGate, routeStartedAt)
         : preGate;
-      const predictionPrompt = buildPredictionPrompt(profileMarkdown, decision, selectedCards);
-      const prediction = await codex.runJson("prediction", predictionPrompt, (value) =>
-        validatePrediction(value, decision.options, selectedIds)
-      );
+      const fastResult = candidates.length === 0
+        ? {
+            memorySelection: noCandidateMemorySelection(),
+            prediction: await codex.runJson("prediction", buildPredictionPrompt(profileMarkdown, decision, []), (value) =>
+              validatePrediction(value, decision.options, new Set<string>())
+            )
+          }
+        : await codex.runJson(
+            "prediction",
+            buildPredictionWithMemoryPrompt(profileMarkdown, decision, candidates),
+            (value) => validatePredictionWithMemorySelection(value, decision.options, candidateIds)
+          );
+      const selectedCards = cardsSelectedBy(fastResult.memorySelection, candidates);
+      const prediction = fastResult.prediction;
       const postGate = evaluatePostFastEscalation(gateForFast, decision, prediction, routeStartedAt);
 
       if (postGate.mode === "deep") {
-        await runDeepPrediction(postGate);
+        await runDeepPrediction(postGate, fastResult.memorySelection, selectedCards);
         return;
       }
 
       sendJson(response, 200, {
         prediction,
-        memorySelection: selection,
+        memorySelection: fastResult.memorySelection,
         candidateMemoryCount: candidates.length,
         mode: "fast",
         gate: { ...postGate, mode: "fast" }
@@ -256,6 +282,18 @@ export function createBcdServer(options: BcdServerOptions = {}) {
         });
       });
     }, 0);
+  }
+
+  function noCandidateMemorySelection(): MemorySelection {
+    return {
+      selectedMemoryIds: [],
+      reasoning: "No prior decision memories exist yet."
+    };
+  }
+
+  function cardsSelectedBy(selection: MemorySelection, candidates: DecisionCard[]): DecisionCard[] {
+    const selectedIds = new Set(selection.selectedMemoryIds);
+    return candidates.filter((card) => selectedIds.has(card.id));
   }
 
   async function serveStatic(pathname: string, response: ServerResponse): Promise<void> {

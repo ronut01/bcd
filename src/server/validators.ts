@@ -12,6 +12,15 @@ import type {
 
 const PANEL_ROLES: PanelJudgmentRole[] = ["value_taste_fit", "practicality_cost", "risk_regret"];
 
+export interface PredictionWithMemorySelection {
+  memorySelection: MemorySelection;
+  prediction: PredictionResult;
+}
+
+export interface DeepPredictionWithMemorySelection extends DeepPredictionResult {
+  memorySelection: MemorySelection;
+}
+
 export function validateOptionSuggestion(value: unknown): OptionSuggestion {
   const object = asObject(value, "option suggestion");
   const rawOptions = asArray(object.options, "options");
@@ -59,6 +68,18 @@ export function validatePrediction(value: unknown, options: string[], allowedMem
   };
 }
 
+export function validatePredictionWithMemorySelection(
+  value: unknown,
+  options: string[],
+  candidateMemoryIds: Set<string>
+): PredictionWithMemorySelection {
+  const object = asObject(value, "prediction with memory selection");
+  const memorySelection = validateMemorySelection(object.memorySelection, candidateMemoryIds);
+  const selectedMemoryIds = new Set(memorySelection.selectedMemoryIds);
+  const prediction = validatePrediction(object.prediction, options, selectedMemoryIds);
+  return { memorySelection, prediction };
+}
+
 export function validateDeepPrediction(value: unknown, options: string[], allowedMemoryIds: Set<string>): DeepPredictionResult {
   const object = asObject(value, "deep prediction");
   const keys = Object.keys(object).sort();
@@ -70,6 +91,25 @@ export function validateDeepPrediction(value: unknown, options: string[], allowe
   const synthesis = validateStrictPrediction(asObject(object.synthesis, "synthesis"), options, allowedMemoryIds, "synthesis");
 
   return { panelJudgments, synthesis };
+}
+
+export function validateDeepPredictionWithMemorySelection(
+  value: unknown,
+  options: string[],
+  candidateMemoryIds: Set<string>
+): DeepPredictionWithMemorySelection {
+  const object = asObject(value, "deep prediction with memory selection");
+  const keys = Object.keys(object).sort();
+  if (keys.join(",") !== "memorySelection,panelJudgments,synthesis") {
+    throw new Error("deep prediction with memory selection must contain only memorySelection, panelJudgments, and synthesis");
+  }
+
+  const memorySelection = validateMemorySelection(object.memorySelection, candidateMemoryIds);
+  const selectedMemoryIds = new Set(memorySelection.selectedMemoryIds);
+  const panelJudgments = validatePanelJudgments(object.panelJudgments, options);
+  const synthesis = validateStrictPrediction(asObject(object.synthesis, "synthesis"), options, selectedMemoryIds, "synthesis");
+
+  return { memorySelection, panelJudgments, synthesis };
 }
 
 export function validateDecisionCardDraft(value: unknown): DecisionCardDraft {

@@ -45,8 +45,6 @@ const MBTI_TYPES = [
   "ESFP"
 ];
 
-const REASON_TAGS = ["comfort", "novelty", "time", "money", "energy", "people", "growth", "simplicity"];
-
 const PREFERENCE_PROMPTS = [
   {
     id: "decision_pace",
@@ -209,7 +207,7 @@ function Header({
     <header className="topbar">
       <div className="brand-block">
         <p className="brand-mark">bcd</p>
-        <p className="brand-note">A new choice. A future memory.</p>
+        <p className="brand-note">Personal choice mirror</p>
       </div>
       <div className="status-grid">
         <span>{bootstrap.memoryCount} memories</span>
@@ -416,7 +414,9 @@ function DecisionFlow({ onMemoryChanged }: { onMemoryChanged: () => Promise<void
   const [contextOpen, setContextOpen] = useState(false);
   const [options, setOptions] = useState(["", ""]);
   const [suggested, setSuggested] = useState<SuggestedOption[] | null>(null);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [predictionResponse, setPredictionResponse] = useState<PredictionResponse | null>(null);
+  const [resultOpen, setResultOpen] = useState(false);
   const [busy, setBusy] = useState<"suggest" | "predict" | "feedback" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [feedbackSaved, setFeedbackSaved] = useState(false);
@@ -442,13 +442,45 @@ function DecisionFlow({ onMemoryChanged }: { onMemoryChanged: () => Promise<void
     setOptions([...options, ""]);
   };
 
+  const appendOptions = (labels: string[]) => {
+    setOptions((current) => {
+      const written = current.map((option) => option.trim()).filter(Boolean);
+      const seen = new Set(written.map((option) => option.toLowerCase()));
+      const additions = labels
+        .map((label) => label.trim())
+        .filter(Boolean)
+        .filter((label) => {
+          const key = label.toLowerCase();
+          if (seen.has(key)) {
+            return false;
+          }
+          seen.add(key);
+          return true;
+        });
+      const next = [...written, ...additions];
+      while (next.length < 2) {
+        next.push("");
+      }
+      return next;
+    });
+  };
+
+  const removeOption = (index: number) => {
+    if (options.length <= 2) {
+      return;
+    }
+    setOptions(options.filter((_, optionIndex) => optionIndex !== index));
+  };
+
   const runSuggestion = async () => {
     setBusy("suggest");
     setError(null);
     setPredictionResponse(null);
+    setResultOpen(false);
     try {
-      const result = await suggestOptions({ question, context });
+      const result = await suggestOptions(request);
       setSuggested(result.options);
+      setSuggestionsOpen(true);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -456,20 +488,28 @@ function DecisionFlow({ onMemoryChanged }: { onMemoryChanged: () => Promise<void
     }
   };
 
-  const useSuggestedOptions = () => {
+  const addSuggestedOption = (option: SuggestedOption) => {
+    appendOptions([option.label]);
+  };
+
+  const addAllSuggestedOptions = () => {
     if (!suggested) {
       return;
     }
-    setOptions(suggested.map((option) => option.label));
+    appendOptions(suggested.map((option) => option.label));
+    setSuggestionsOpen(false);
   };
 
   const runPrediction = async () => {
     setBusy("predict");
     setError(null);
     setPredictionResponse(null);
+    setResultOpen(false);
     setFeedbackSaved(false);
     try {
-      setPredictionResponse(await predictChoice(request));
+      const response = await predictChoice(request);
+      setPredictionResponse(response);
+      setResultOpen(true);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -497,7 +537,7 @@ function DecisionFlow({ onMemoryChanged }: { onMemoryChanged: () => Promise<void
         <div className="entry-heading">
           <p className="eyebrow">Decide</p>
           <h2>What choice are you holding?</h2>
-          <p>Capture the moment honestly. You can always reflect more later.</p>
+          <p>Enter the decision, confirm the real options, then compare bcd's prediction with what you actually choose.</p>
         </div>
         <label className="field question-field">
           <span>What is the question?</span>
@@ -514,16 +554,29 @@ function DecisionFlow({ onMemoryChanged }: { onMemoryChanged: () => Promise<void
         </label>
         <div className="option-list">
           {options.map((option, index) => (
-            <label className="field option-field" key={index}>
-              <span>{optionLabel(index)}</span>
+            <div className="field option-field" key={index}>
+              <div className="option-header">
+                <label htmlFor={`option-${index}`}>{optionLabel(index)}</label>
+                {options.length > 2 && (
+                  <button
+                    className="remove-option"
+                    type="button"
+                    onClick={() => removeOption(index)}
+                    aria-label={`Remove ${optionLabel(index)}`}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
               <input
+                id={`option-${index}`}
                 maxLength={200}
                 value={option}
                 onChange={(event) => updateOption(index, event.target.value)}
                 placeholder={`Enter ${optionLabel(index).toLowerCase()}...`}
               />
               <small>{option.length} / 200</small>
-            </label>
+            </div>
           ))}
         </div>
         <button className="add-option" onClick={addOption} type="button">
@@ -547,15 +600,61 @@ function DecisionFlow({ onMemoryChanged }: { onMemoryChanged: () => Promise<void
             />
           </label>
         )}
-        {suggested && (
-          <div className="suggestion-strip">
-            <div>
-              <strong>Codex suggested {suggested.length} options.</strong>
-              <p>{suggested.map((option) => option.label).join(" / ")}</p>
+        {suggested && !suggestionsOpen && (
+          <div className="suggestion-collapsed">
+            <span>{suggested.length} suggested options available.</span>
+            <div className="suggestion-collapsed-actions">
+              <button className="secondary compact" type="button" onClick={() => setSuggestionsOpen(true)}>
+                Show suggestions
+              </button>
+              <button className="secondary compact" type="button" disabled={busy === "suggest"} onClick={runSuggestion}>
+                {busy === "suggest" ? "Regenerating..." : "Regenerate"}
+              </button>
             </div>
-            <button className="secondary compact" onClick={useSuggestedOptions}>
-              Use suggestions
-            </button>
+          </div>
+        )}
+        {suggested && suggestionsOpen && (
+          <div className="suggestion-panel" role="dialog" aria-label="Suggested options">
+            <div className="suggestion-panel-header">
+              <div>
+                <strong>Codex suggested {suggested.length} options.</strong>
+                <p>Add one suggestion at a time, or append all of them under your current options.</p>
+              </div>
+              <button className="secondary compact" type="button" onClick={() => setSuggestionsOpen(false)}>
+                Close
+              </button>
+            </div>
+            <div className="suggestion-list">
+              {suggested.map((option) => {
+                const alreadyAdded = request.options.some(
+                  (existingOption) => existingOption.toLowerCase() === option.label.trim().toLowerCase()
+                );
+                return (
+                  <article className="suggestion-card" key={option.label}>
+                    <div>
+                      <h3>{option.label}</h3>
+                      {option.notes && <p>{option.notes}</p>}
+                    </div>
+                    <button
+                      className="secondary compact"
+                      type="button"
+                      disabled={alreadyAdded}
+                      onClick={() => addSuggestedOption(option)}
+                    >
+                      {alreadyAdded ? "Added" : "Add"}
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+            <div className="suggestion-footer">
+              <button className="secondary" type="button" disabled={busy === "suggest"} onClick={runSuggestion}>
+                {busy === "suggest" ? "Regenerating..." : "Regenerate suggestions"}
+              </button>
+              <button className="primary suggestion-add-all" type="button" onClick={addAllSuggestedOptions}>
+                Add all suggestions
+              </button>
+            </div>
           </div>
         )}
         {error && <ErrorBox error={error} />}
@@ -567,18 +666,90 @@ function DecisionFlow({ onMemoryChanged }: { onMemoryChanged: () => Promise<void
             {busy === "predict" ? "Reflecting..." : "Reflect my choice"}
           </button>
         </div>
+        {predictionResponse && !resultOpen && (
+          <div className="result-return">
+            <div>
+              <strong>Prediction result is ready.</strong>
+              <span>{predictionResponse.prediction.chosenOption}</span>
+            </div>
+            <button className="secondary compact" type="button" onClick={() => setResultOpen(true)}>
+              View result
+            </button>
+          </div>
+        )}
       </div>
-
-      <div className="reflection-panel">
-        <ResultView
-          busy={busy}
-          request={request}
-          response={predictionResponse}
-          feedbackSaved={feedbackSaved}
-          onFeedback={submitFeedback}
-        />
-      </div>
+      <ResultDialog
+        open={Boolean(predictionResponse && resultOpen)}
+        busy={busy}
+        request={request}
+        response={predictionResponse}
+        feedbackSaved={feedbackSaved}
+        onClose={() => setResultOpen(false)}
+        onFeedback={submitFeedback}
+      />
     </section>
+  );
+}
+
+function ResultDialog({
+  open,
+  busy,
+  request,
+  response,
+  feedbackSaved,
+  onClose,
+  onFeedback
+}: {
+  open: boolean;
+  busy: string | null;
+  request: DecisionRequest;
+  response: PredictionResponse | null;
+  feedbackSaved: boolean;
+  onClose: () => void;
+  onFeedback: (payload: FeedbackPayload) => Promise<void>;
+}): JSX.Element {
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose, open]);
+
+  if (!open || !response) {
+    return <></>;
+  }
+
+  return (
+    <div
+      className="result-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <section className="result-dialog" role="dialog" aria-modal="true" aria-labelledby="prediction-result-title">
+        <div className="result-dialog-controls">
+          <span>Prediction result</span>
+          <button className="icon-button" type="button" aria-label="Close result" onClick={onClose}>
+            {"\u00d7"}
+          </button>
+        </div>
+        <ResultView busy={busy} request={request} response={response} feedbackSaved={feedbackSaved} onFeedback={onFeedback} />
+      </section>
+    </div>
   );
 }
 
@@ -591,43 +762,26 @@ function ResultView({
 }: {
   busy: string | null;
   request: DecisionRequest;
-  response: PredictionResponse | null;
+  response: PredictionResponse;
   feedbackSaved: boolean;
   onFeedback: (payload: FeedbackPayload) => Promise<void>;
 }): JSX.Element {
   const [actualChoice, setActualChoice] = useState("");
-  const [reasonTags, setReasonTags] = useState<string[]>([]);
   const [reasonText, setReasonText] = useState("");
 
   useEffect(() => {
     setActualChoice("");
-    setReasonTags([]);
     setReasonText("");
   }, [response]);
-
-  if (!response) {
-    return (
-      <div className="empty-result">
-        <div className="empty-icon" aria-hidden="true" />
-        <h2>Your reflection will appear here</h2>
-        <p>After you reflect, this space will hold your insight and the memory it becomes.</p>
-        <div className="reflection-metrics">
-          <span>Memory</span>
-          <strong>--</strong>
-          <span>Confidence</span>
-          <strong>--</strong>
-        </div>
-        <p className="quiet-note">Your reflections live here. Revisit them anytime.</p>
-      </div>
-    );
-  }
 
   const { prediction, memorySelection, candidateMemoryCount, mode, gate, panelJudgments } = response;
 
   return (
     <div className="result-stack">
       <p className="eyebrow">Prediction</p>
-      <h2>You would probably choose {prediction.chosenOption}</h2>
+      <h2 id="prediction-result-title">
+        You would probably choose <span>{prediction.chosenOption}</span>
+      </h2>
       <p className="result-copy">{prediction.explanation}</p>
       <div className="meta-row">
         <span>Confidence: {prediction.confidence}</span>
@@ -663,25 +817,14 @@ function ResultView({
             ))}
           </select>
         </label>
-        <div className="tag-picker">
-          {REASON_TAGS.map((tag) => (
-            <label key={tag}>
-              <input
-                type="checkbox"
-                checked={reasonTags.includes(tag)}
-                onChange={(event) => {
-                  setReasonTags(
-                    event.target.checked ? [...reasonTags, tag] : reasonTags.filter((entry) => entry !== tag)
-                  );
-                }}
-              />
-              <span>{tag}</span>
-            </label>
-          ))}
-        </div>
         <label className="field">
-          <span>Short reason</span>
-          <textarea rows={3} value={reasonText} onChange={(event) => setReasonText(event.target.value)} />
+          <span>Why did you choose it?</span>
+          <textarea
+            rows={3}
+            value={reasonText}
+            onChange={(event) => setReasonText(event.target.value)}
+            placeholder="A short note is enough. Example: It felt lower-risk, or I wanted the calmer option."
+          />
         </label>
         <button
           className="primary"
@@ -691,7 +834,7 @@ function ResultView({
               request,
               prediction,
               actualChoice,
-              reasonTags,
+              reasonTags: [],
               reasonText: reasonText.trim() || undefined,
               predictionMode: mode,
               predictionGate: gate,
